@@ -29,6 +29,7 @@ class User(Base):
 
 
 def get_db() -> Generator[Session, None, None]:
+    """Provide a database session and close it after the request."""
     db = SessionLocal()
     try:
         yield db

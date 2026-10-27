@@ -1,8 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL environment variable is not set!");
-}
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 export async function loginUser(email: string, password: string) {
   const response = await fetch(`${API_URL}/auth/login`, {
@@ -21,13 +17,13 @@ export async function loginUser(email: string, password: string) {
   return response.json();
 }
 
-export async function signupUser(email: string, password: string, role: string = 'user') {
+export async function signupUser(email: string, password: string) {
   const response = await fetch(`${API_URL}/auth/signup`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, password, role }),
+    body: JSON.stringify({ email, password }),
   });
 
   if (!response.ok) {

@@ -2,19 +2,34 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+Use Node.js 20.9+ and Bun 1.3.14. From `frontend`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install --frozen-lockfile
+cp env.sample .env.local
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Start [the authentication backend](../backend/auth-service/README.md) separately on port 8000. Open [http://localhost:3000/auth](http://localhost:3000/auth) to sign up or log in.
+
+`NEXT_PUBLIC_API_URL` defaults to `http://localhost:8000`. Set it in `.env.local` before starting development or building if the API runs elsewhere. Next.js embeds this public URL at build time; changing it requires a rebuild. Never put credentials or signing keys in `NEXT_PUBLIC_` variables.
+
+To check and run a production build locally:
+
+```bash
+bun run lint
+bun run build
+bun run start
+```
+
+Focused browser regressions cover signup/login, duplicate submissions, errors and retries, and token visibility. After building, run:
+
+```bash
+bunx playwright install chromium
+bun run test:e2e
+```
+
+The browser tests mock authentication responses and start the production frontend automatically on port 3100, leaving the development server on port 3000 alone.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
