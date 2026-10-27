@@ -1,15 +1,21 @@
 [project]
 name = "marksync-auth"
 version = "0.1.0"
-description = "Add your description here"
+description = "Authentication svc for MarkSync AI"
 readme = "README.md"
 authors = [
-    { name = "zaki23", email = "zaki@renew-energy.co.uk" }
+    { name = "zaki23", email = "zaki@renew-energy.co.uk" },
+    { name = "AmberLee", email = "eraser.8990@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.151.0",
     "uvicorn[standard]>=0.54.0",
+    "sqlalchemy>=2.0.35",
+    "psycopg2-binary>=2.9.9",
+    "pydantic[email]>=2.9.0",
+    "pyjwt>=2.9.0",
+    "pwdlib[argon2]>=0.2.1",
 ]
 
 [project.scripts]
