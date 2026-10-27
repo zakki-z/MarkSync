@@ -7,7 +7,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from pwdlib import PasswordHash
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "marksync-ai-secret-key-sussex-2026")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY missing, check env file.")
+
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 

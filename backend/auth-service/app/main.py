@@ -6,12 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel, ConfigDict, EmailStr
 from sqlalchemy.orm import Session
 
-from app.auth import (
-    create_access_token,
-    decode_access_token,
-    get_password_hash,
-    verify_password,
-)
+from app.auth import (create_access_token, decode_access_token, get_password_hash, verify_password)
 from app.database import Base, User, engine, get_db
 
 
