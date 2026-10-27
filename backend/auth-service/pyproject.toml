@@ -1,10 +1,11 @@
 [project]
 name = "marksync-auth"
 version = "0.1.0"
-description = "Add your description here"
+description = "Authentication svc for MarkSync AI"
 readme = "README.md"
 authors = [
-    { name = "zaki23", email = "zaki@renew-energy.co.uk" }
+    { name = "zaki23", email = "zaki@renew-energy.co.uk" },
+    { name = "AmberLee", email = "eraser.8990@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
