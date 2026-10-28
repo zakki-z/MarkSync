@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import Link from 'next/link';
+import { saveSessionToken } from '@/src/session';
 import { loginUser, signupUser } from '@/src/authService';
 
 export default function AuthPage() {
@@ -8,7 +10,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  const token = useRef<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
   const submitting = useRef(false);
   const [pending, setPending] = useState(false);
 
@@ -21,12 +23,14 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         const data = await loginUser(email, password);
-        token.current = data.access_token;
+        saveSessionToken(data.access_token);
+        setSignedIn(true);
         setMessage('Login successful!');
       } else {
         await signupUser(email, password);
         setMessage('Signup successful! Please log in.');
         setIsLogin(true);
+        setSignedIn(false);
       }
     } catch (err: unknown) {
       setMessage(`Error: ${err instanceof Error ? err.message : 'Authentication failed. Please try again.'}`);
@@ -76,6 +80,7 @@ export default function AuthPage() {
       </button>
 
       {message && <p style={{ marginTop: '15px', color: message.startsWith('Error') ? 'red' : 'green' }}>{message}</p>}
+      {signedIn && <Link href="/documents" style={{ display: 'inline-block', marginTop: '12px', color: '#0070f3', fontWeight: 600 }}>Open document workspace →</Link>}
     </div>
   );
 }
