@@ -33,3 +33,25 @@ export async function signupUser(email: string, password: string) {
 
   return response.json();
 }
+
+
+export type AuthUser = {
+  id: number;
+  email: string;
+  role: string;
+};
+
+/** Resolve the actual user from FastAPI; do not trust a browser-supplied author ID. */
+export async function getCurrentUser(token: string): Promise<AuthUser> {
+  const response = await fetch(`${API_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 404) {
+      throw new Error('Your session expired. Please log in again.');
+    }
+    throw new Error('Unable to load your account. Please try again.');
+  }
+  return (await response.json()) as AuthUser;
+}
