@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: marksync
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-marksync_dev}
+      POSTGRES_DB: marksync_auth
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marksync -d marksync_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth:
+    build:
+      context: ./backend/auth-service
+      dockerfile: ../../infra/python/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://marksync:${POSTGRES_PASSWORD:-marksync_dev}@postgres:5432/marksync_auth
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      CORS_ORIGINS: http://localhost:8080
+    volumes:
+      - ./backend/auth-service:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  document:
+    build:
+      context: ./backend/document-service
+      dockerfile: ../../infra/java/Dockerfile
+    environment:
+      SERVER_PORT: "8082"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/marksync_documents
+      SPRING_DATASOURCE_USERNAME: marksync
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-marksync_dev}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  collaboration:
+    build:
+      context: ./backend/collaboration-service
+      dockerfile: ../../infra/nodejs/Dockerfile
+    command: ["sh", "-c", "bun install --frozen-lockfile && bun --watch index.ts"]
+    environment:
+      PORT: "3001"
+    volumes:
+      - ./backend/collaboration-service:/app
+      - collaboration_node_modules:/app/node_modules
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../infra/nodejs/Dockerfile
+    command: ["sh", "-c", "bun install --frozen-lockfile && bun run dev --hostname 0.0.0.0"]
+    environment:
+      NEXT_PUBLIC_API_URL: /
+      AUTH_SERVICE_URL: http://auth:8000
+      DOCUMENT_SERVICE_URL: http://document:8082
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - auth
+      - document
+
+  nginx:
+    build:
+      context: ./infra/nginx
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  frontend_node_modules:
+  collaboration_node_modules:

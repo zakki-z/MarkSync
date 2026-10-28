@@ -16,6 +16,7 @@ dependencies = [
     "pydantic[email]>=2.9.0",
     "pyjwt>=2.9.0",
     "pwdlib[argon2]>=0.2.1",
+    "psycopg[binary]>=3.2,<4",
 ]
 
 [project.scripts]
