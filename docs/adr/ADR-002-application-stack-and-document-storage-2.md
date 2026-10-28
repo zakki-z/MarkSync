@@ -3,7 +3,15 @@
 - **Status:** Proposed (to become *Accepted* when this PR is merged after peer review)
 - **Date:** 2026-10-24
 - **Deciders:** MarkSync team
-- **Related:** [ADR-001: Real-Time Concurrency Architecture](ADR-001-real-time-concurrency-architecture.md)
+- **Related:** [ADR-001: Real-Time Concurrency Architecture](ADR-001-real-time-concurrency-architecture-2.md)
+
+## Task 1 implementation scope (2026-10-28)
+
+The implemented walking skeleton uses Next.js 16 / React 19 / Tailwind 4, FastAPI on Python 3.12, Spring Boot 4 on Java 21, Bun native WebSockets, PostgreSQL 17, Nginx, and `compose.yaml`. Authentication uses Argon2 password hashes and one-hour **HS256** JWTs with a shared environment secret, stored by the browser in an HttpOnly SameSite cookie. There are no refresh tokens or asymmetric signing keys in Task 1. Next.js protects the page and browser adapters; Spring independently enforces JWT authentication and document ownership. Flyway manages the document schema, with Hibernate validation only.
+
+Presence authenticates upgrades, checks document ownership before joining, deduplicates users across connections, and handles heartbeat/disconnect cleanup. Documents remain private: two sessions of the same owner produce one roster entry with two active sessions. Two distinct accounts cannot share a document without a future sharing design. Task 1 contains no concurrent editing, Yjs, MongoDB, Kafka, permission events, or CRDT persistence. References to those technologies below describe proposed later phases, not currently deployed services. The Markdown preview is an escaped React-rendered subset; remark/rehype remains a future parser option.
+
+The original decision format and AI prompt appendix below are preserved. This implementation update records repository behavior, not a new AI consultation or peer acceptance.
 
 ## Context
 
@@ -16,7 +24,7 @@ Constraints and forces:
 - **The team.** Three people, one module. The team wants the assignment to double as a learning opportunity with a modern distributed stack, and the module convenor agreed to us going beyond the recommended stack.
 - **Shape of the domain.** Identity, workspaces, permissions and document metadata are relational and require transactional integrity. The state of real-time collaboration is binary, append-heavy and event-driven. Content analysis (AI) and notifications are consumers running asynchronously.
 - **Local deployment only.** Everything needs to run with one command on a marker's machine. There is no requirement to deploy to the cloud at the moment.
-- **The current repository.** A monorepo containing service skeletons: a Next.js frontend, FastAPI services, Spring Boot services and a Bun-based Collaboration service written in TypeScript. There is no Docker Compose file or root README yet.
+- **The current repository.** A monorepo containing service skeletons: a Next.js frontend, FastAPI services, Spring Boot services and a Bun-based Collaboration service written in TypeScript. The Task 1 implementation now supplies `compose.yaml` and a root README.
 
 ## Decision
 
@@ -29,7 +37,7 @@ Constraints and forces:
 | Team learning value | Industry-standard skill | Valuable, but less transferable | Valuable |
 | Risk | Larger bundle and more boilerplate | Fewer examples for collaborative-editor integration | Mid |
 
-The repository is scaffolded using Next.js, which is a React framework. The editor page runs in the browser because it holds a live WebSocket connection. We use remark/rehype to render the Markdown so that we can extend the parser in future tasks via plugins. TypeScript is mandatory for the frontend.
+The repository is scaffolded using Next.js, which is a React framework. The editor page runs in the browser because it holds a live WebSocket connection. Task 1 renders a small Markdown subset safely as React elements; remark/rehype is the intended extensible parser for later tasks. TypeScript is mandatory for the frontend.
 
 ### 2. Real-time transport: native WebSockets
 
@@ -79,10 +87,10 @@ Alternative approaches considered:
 | Decision | Rationale | Cost we accept |
 |---|---|---|
 | Microservices | Independent deployment, modularity, service-level scaling | More moving parts and network failure modes than a modular monolith for a three-person team. Mitigated by Docker Compose, a monorepo and a small walking skeleton |
-| Event-driven architecture (Kafka) | Loose coupling; the AI and Notification services consume events without the producer knowing them | Kafka is heavy for a skeleton. It is introduced incrementally: not needed to pass Task 1, and the first topics arrive with the first cross-service consumer. A single-node broker runs in Docker Compose |
+| Event-driven architecture (Kafka) | Loose coupling; the AI and Notification services consume events without the producer knowing them | Kafka is heavy for a skeleton. It is introduced incrementally: not needed to pass Task 1, and the first topics arrive with the first cross-service consumer. A single-node broker may be added to Compose in a later phase |
 | REST APIs | Simple synchronous calls between clients and services | Chatty if overused. Real-time traffic uses WebSockets instead |
 | WebSockets | Persistent connections for live collaboration (see section 2) | Stateful connections complicate scaling, see ADR-001 |
-| JWT authentication | Stateless identity between services. The Auth service signs short-lived access tokens with an asymmetric key so other services verify with the public key and never hold the signing secret. Refresh tokens and users are stored in PostgreSQL | Revocation is not immediate. Mitigated by short lifetimes and the `permission.changed` event for open sockets |
+| JWT authentication | Stateless identity between services. Task 1 signs one-hour HS256 access tokens with a shared environment secret and stores users in PostgreSQL. Asymmetric signing and refresh tokens are future work | Revocation is not immediate. Task 1 revalidates socket auth and ownership periodically; a `permission.changed` event is a future option |
 | Database per service | Clear data ownership and low coupling | No cross-service transactions. A transactional outbox in the Document service is a likely follow-up to avoid losing events on a failed publish |
 | Monorepo | One place for code, reviews and CI, which suits a three-person team | CI must stay fast as the repository grows. Path filters can be added to the workflow |
 
@@ -120,13 +128,13 @@ Alternative approaches considered:
 **Negative and risks**
 
 - Operational overhead is high for the team size: three languages, two databases and Kafka. This is the primary risk of the entire decision. We will review it after Task 1 and simplify (for example, drop MongoDB or defer Kafka) if it slows delivery.
-- The repository currently has no Docker Compose file and no root README. Both are needed for the skeleton and are the next work items.
+- Task 1 now supplies Compose and a root README; future service additions must keep the local setup manageable.
 - Separate logical PostgreSQL databases and event-driven synchronisation mean data may be temporarily out of date between services.
 - Skills are spread across Python, Java and TypeScript, so code reviews in an unfamiliar language need extra attention.
 
 **Follow-ups**
 
-- Add `docker-compose.yml` (frontend, all services, PostgreSQL, MongoDB; Kafka when first needed) and a root README with start-up instructions.
+- Keep `compose.yaml` and the root README aligned with active services; MongoDB and Kafka remain deferred.
 - Declare the missing dependencies and a `pyproject.toml` for the AI and Notification services so they can join CI.
 - Commit `uv.lock` files for the Python services.
 - Write a separate ADR for the AI service's storage and semantic-search approach.

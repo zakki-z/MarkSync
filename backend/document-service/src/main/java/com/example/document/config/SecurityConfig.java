@@ -10,13 +10,14 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.Duration;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 
 @Configuration
 public class SecurityConfig {
@@ -42,7 +43,7 @@ public class SecurityConfig {
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefault(),
+                new JwtTimestampValidator(Duration.ZERO),
                 new JwtClaimValidator<String>("sub", subject ->
                         subject != null && subject.matches("[1-9][0-9]{0,119}")),
                 new JwtClaimValidator<Instant>("exp", expiration -> expiration != null)));

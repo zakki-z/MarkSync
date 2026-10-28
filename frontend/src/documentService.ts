@@ -13,7 +13,10 @@ export type DocumentDraft = {
 };
 
 export class DocumentApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
     super(message);
     this.name = 'DocumentApiError';
   }
@@ -21,13 +24,11 @@ export class DocumentApiError extends Error {
 
 async function documentRequest<T>(
   path: string,
-  token: string,
   options: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; data?: DocumentDraft } = {},
 ): Promise<T> {
   const response = await fetch(`/api/documents${path}`, {
     method: options.method ?? 'GET',
     headers: {
-      Authorization: `Bearer ${token}`,
       ...(options.data ? { 'Content-Type': 'application/json' } : {}),
     },
     body: options.data ? JSON.stringify(options.data) : undefined,
@@ -38,7 +39,10 @@ async function documentRequest<T>(
     const error: unknown = await response.json().catch(() => null);
     const issue = error as { detail?: string; message?: string; title?: string } | null;
     throw new DocumentApiError(
-      issue?.detail ?? issue?.message ?? issue?.title ?? `Document request failed (${response.status})`,
+      issue?.detail ??
+        issue?.message ??
+        issue?.title ??
+        `Document request failed (${response.status})`,
       response.status,
     );
   }
@@ -46,17 +50,14 @@ async function documentRequest<T>(
   return response.json() as Promise<T>;
 }
 
-export const listDocuments = (token: string) =>
-  documentRequest<DocumentDTO[]>('', token);
+export const listDocuments = () => documentRequest<DocumentDTO[]>('');
 
-export const getDocument = (token: string, id: number) =>
-  documentRequest<DocumentDTO>(`/${id}`, token);
+export const getDocument = (id: number) => documentRequest<DocumentDTO>(`/${id}`);
 
-export const createDocument = (token: string, data: DocumentDraft) =>
-  documentRequest<DocumentDTO>('', token, { method: 'POST', data });
+export const createDocument = (data: DocumentDraft) =>
+  documentRequest<DocumentDTO>('', { method: 'POST', data });
 
-export const updateDocument = (token: string, id: number, data: DocumentDraft) =>
-  documentRequest<DocumentDTO>(`/${id}`, token, { method: 'PUT', data });
+export const updateDocument = (id: number, data: DocumentDraft) =>
+  documentRequest<DocumentDTO>(`/${id}`, { method: 'PUT', data });
 
-export const deleteDocument = (token: string, id: number) =>
-  documentRequest<void>(`/${id}`, token, { method: 'DELETE' });
+export const deleteDocument = (id: number) => documentRequest<void>(`/${id}`, { method: 'DELETE' });

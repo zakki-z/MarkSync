@@ -18,9 +18,15 @@ function inlineMarkup(text: string): React.ReactNode[] {
       const url = match[3];
       // Never create javascript:, data:, or protocol-relative links from user-authored Markdown.
       const safe = /^(https?:\/\/|mailto:|\/[^/]|#)/i.test(url);
-      parts.push(safe
-        ? <a key={key} href={url} target="_blank" rel="noopener noreferrer">{match[2]}</a>
-        : match[2]);
+      parts.push(
+        safe ? (
+          <a key={key} href={url} target="_blank" rel="noopener noreferrer">
+            {match[2]}
+          </a>
+        ) : (
+          match[2]
+        ),
+      );
     } else if (match[4] !== undefined) {
       parts.push(<code key={key}>{match[4]}</code>);
     } else if (match[5] !== undefined) {
@@ -46,7 +52,10 @@ export function MarkdownPreview({ markdown }: { markdown: string }) {
   let index = 0;
   while (index < lines.length) {
     const line = lines[index];
-    if (!line.trim()) { index++; continue; }
+    if (!line.trim()) {
+      index++;
+      continue;
+    }
     const key = index;
 
     if (/^\s*```/.test(line)) {
@@ -57,7 +66,11 @@ export function MarkdownPreview({ markdown }: { markdown: string }) {
         code.push(lines[index++]);
       }
       if (index < lines.length) index++;
-      nodes.push(<pre key={key}><code data-language={language || undefined}>{code.join('\n')}</code></pre>);
+      nodes.push(
+        <pre key={key}>
+          <code data-language={language || undefined}>{code.join('\n')}</code>
+        </pre>,
+      );
       continue;
     }
 
@@ -67,12 +80,23 @@ export function MarkdownPreview({ markdown }: { markdown: string }) {
       const children = inlineMarkup(heading[2]);
       // Explicit cases keep heading types predictable in React/TypeScript.
       switch (level) {
-        case 1: nodes.push(<h1 key={key}>{children}</h1>); break;
-        case 2: nodes.push(<h2 key={key}>{children}</h2>); break;
-        case 3: nodes.push(<h3 key={key}>{children}</h3>); break;
-        case 4: nodes.push(<h4 key={key}>{children}</h4>); break;
-        case 5: nodes.push(<h5 key={key}>{children}</h5>); break;
-        default: nodes.push(<h6 key={key}>{children}</h6>);
+        case 1:
+          nodes.push(<h1 key={key}>{children}</h1>);
+          break;
+        case 2:
+          nodes.push(<h2 key={key}>{children}</h2>);
+          break;
+        case 3:
+          nodes.push(<h3 key={key}>{children}</h3>);
+          break;
+        case 4:
+          nodes.push(<h4 key={key}>{children}</h4>);
+          break;
+        case 5:
+          nodes.push(<h5 key={key}>{children}</h5>);
+          break;
+        default:
+          nodes.push(<h6 key={key}>{children}</h6>);
       }
       index++;
       continue;
@@ -87,7 +111,13 @@ export function MarkdownPreview({ markdown }: { markdown: string }) {
       while (index < lines.length && /^\s*>\s?/.test(lines[index])) {
         content.push(lines[index++].replace(/^\s*>\s?/, ''));
       }
-      nodes.push(<blockquote key={key}>{content.map((text, i) => <p key={i}>{inlineMarkup(text)}</p>)}</blockquote>);
+      nodes.push(
+        <blockquote key={key}>
+          {content.map((text, i) => (
+            <p key={i}>{inlineMarkup(text)}</p>
+          ))}
+        </blockquote>,
+      );
       continue;
     }
 
@@ -105,8 +135,11 @@ export function MarkdownPreview({ markdown }: { markdown: string }) {
     }
 
     const paragraph: string[] = [];
-    while (index < lines.length && lines[index].trim() &&
-      !/^(#{1,6}\s|\s*```|\s*>|\s*[-*+]\s+|\s*\d+\.\s+)/.test(lines[index])) {
+    while (
+      index < lines.length &&
+      lines[index].trim() &&
+      !/^(#{1,6}\s|\s*```|\s*>|\s*[-*+]\s+|\s*\d+\.\s+)/.test(lines[index])
+    ) {
       paragraph.push(lines[index++]);
     }
     if (paragraph.length) nodes.push(<p key={key}>{inlineMarkup(paragraph.join(' '))}</p>);

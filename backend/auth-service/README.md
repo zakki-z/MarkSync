@@ -7,7 +7,7 @@ FastAPI authentication with SQLAlchemy persistence, Argon2 password hashing, and
 From `backend/auth-service`, with Python 3.12+ and uv installed:
 
 ```bash
-uv sync --group dev
+uv sync --locked --group dev
 cp env.sample .env
 openssl rand -hex 32
 ```
@@ -29,7 +29,7 @@ Open <http://localhost:8000/docs> for the API. The frontend runs separately at <
 ## API endpoints
 
 - `GET /health`: health check.
-- `POST /auth/signup`: register with `email` and `password`. Additional role input cannot grant administrator privileges.
+- `POST /auth/signup`: register with `email` and an 8–128 character `password`. Additional role input cannot grant administrator privileges.
 - `POST /auth/login`: submit JSON `email` and `password` to receive an access token.
 - `GET /auth/me`: retrieve the stored profile with `Authorization: Bearer <token>`.
 
@@ -43,3 +43,5 @@ uv run pytest
 ```
 
 Tests configure an isolated in-memory SQLite database and a newly generated test signing key before importing the application. They require no `.env`, PostgreSQL server, or shared secrets, and never access the development database.
+
+Through Nginx, the browser calls the Next.js `/api/auth/*` adapter. It stores the token in an HttpOnly cookie and enforces Origin checks; it never returns the access token to browser JavaScript. FastAPI validation responses omit input values so credentials cannot be echoed in errors.
