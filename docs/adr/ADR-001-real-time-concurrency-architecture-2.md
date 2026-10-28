@@ -3,7 +3,15 @@
 - **Status:** Proposed (to become *Accepted* when this PR is merged after peer review)
 - **Date:** 2026-10-24
 - **Deciders:** MarkSync team
-- **Related:** [ADR-002: Application Stack and Document Storage](ADR-002-application-stack-and-document-storage.md)
+- **Related:** [ADR-002: Application Stack and Document Storage](ADR-002-application-stack-and-document-storage-2.md)
+
+## Task 1 implementation scope (2026-10-28)
+
+The implemented walking skeleton uses Next.js 16 / React 19 / Tailwind 4, FastAPI on Python 3.12, Spring Boot 4 on Java 21, Bun native WebSockets, PostgreSQL 17, Nginx, and `compose.yaml`. Authentication uses Argon2 password hashes and one-hour **HS256** JWTs with a shared environment secret, stored by the browser in an HttpOnly SameSite cookie. There are no refresh tokens or asymmetric signing keys in Task 1. Next.js protects the page and browser adapters; Spring independently enforces JWT authentication and document ownership. Flyway manages the document schema, with Hibernate validation only.
+
+Presence authenticates upgrades, checks document ownership before joining, deduplicates users across connections, and handles heartbeat/disconnect cleanup. Documents remain private: two sessions of the same owner produce one roster entry with two active sessions. Two distinct accounts cannot share a document without a future sharing design. Task 1 contains no concurrent editing, Yjs, MongoDB, Kafka, permission events, or CRDT persistence. References to those technologies below describe proposed later phases, not currently deployed services. The Markdown preview is an escaped React-rendered subset; remark/rehype remains a future parser option.
+
+The original decision format and AI prompt appendix below are preserved. This implementation update records repository behavior, not a new AI consultation or peer acceptance.
 
 ## Context
 

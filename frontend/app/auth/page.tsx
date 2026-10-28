@@ -1,86 +1,125 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
-import Link from 'next/link';
-import { saveSessionToken } from '@/src/session';
+import { useRef, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { loginUser, signupUser } from '@/src/authService';
+import { Brand, Button, Feedback } from '@/src/components/ui';
 
 export default function AuthPage() {
+  const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  const [signedIn, setSignedIn] = useState(false);
+  const [error, setError] = useState(false);
   const submitting = useRef(false);
   const [pending, setPending] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (submitting.current) return;
     submitting.current = true;
     setPending(true);
     setMessage('');
+    setError(false);
     try {
       if (isLogin) {
-        const data = await loginUser(email, password);
-        saveSessionToken(data.access_token);
-        setSignedIn(true);
-        setMessage('Login successful!');
-      } else {
-        await signupUser(email, password);
-        setMessage('Signup successful! Please log in.');
-        setIsLogin(true);
-        setSignedIn(false);
+        await loginUser(email, password);
+        router.replace('/documents');
+        router.refresh();
+        return;
       }
-    } catch (err: unknown) {
-      setMessage(`Error: ${err instanceof Error ? err.message : 'Authentication failed. Please try again.'}`);
-    } finally {
-      submitting.current = false;
-      setPending(false);
+      await signupUser(email, password);
+      setPassword('');
+      setMessage('Signup successful! Please log in.');
+      setIsLogin(true);
+    } catch (err) {
+      setError(true);
+      setMessage(err instanceof Error ? err.message : 'Authentication failed. Please try again.');
     }
-  };
+    submitting.current = false;
+    setPending(false);
+  }
 
   return (
-    <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', fontFamily: 'sans-serif' }}>
-      <h2>{isLogin ? 'Login to MarkSync AI' : 'Sign Up for MarkSync AI'}</h2>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        <div>
-          <label htmlFor="email" style={{ display: 'block', marginBottom: '5px' }}>Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-          />
-        </div>
-        <div>
-          <label htmlFor="password" style={{ display: 'block', marginBottom: '5px' }}>Password</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-          />
-        </div>
-        <button type="submit" disabled={pending} style={{ padding: '10px', background: '#0070f3', color: '#fff', border: 'none', cursor: 'pointer' }}>
-          {pending ? 'Please wait…' : isLogin ? 'Login' : 'Sign Up'}
-        </button>
-      </form>
-
-      <button
-        disabled={pending}
-        onClick={() => setIsLogin(!isLogin)}
-        style={{ background: 'none', border: 'none', color: '#0070f3', cursor: 'pointer', marginTop: '15px' }}
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+      <section
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"
+        aria-labelledby="auth-title"
       >
-        {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Login'}
-      </button>
-
-      {message && <p style={{ marginTop: '15px', color: message.startsWith('Error') ? 'red' : 'green' }}>{message}</p>}
-      {signedIn && <Link href="/documents" style={{ display: 'inline-block', marginTop: '12px', color: '#0070f3', fontWeight: 600 }}>Open document workspace →</Link>}
-    </div>
+        <Brand />
+        <h1 id="auth-title" className="mt-8 text-2xl font-bold tracking-tight text-slate-900">
+          {isLogin ? 'Welcome back' : 'Create your account'}
+        </h1>
+        <p className="mt-2 mb-7 text-sm leading-6 text-slate-600">
+          {isLogin
+            ? 'Sign in to your Markdown workspace.'
+            : 'A clear space for your notes, ideas, and documents.'}
+        </p>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5" aria-busy={pending}>
+          <div>
+            <label htmlFor="email" className="mb-2 block text-sm font-medium">
+              Email
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              maxLength={254}
+              disabled={pending}
+              className="form-input"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="mb-2 block text-sm font-medium">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete={isLogin ? 'current-password' : 'new-password'}
+              required
+              minLength={isLogin ? 1 : 8}
+              maxLength={128}
+              disabled={pending}
+              aria-describedby={!isLogin ? 'password-help' : undefined}
+              className="form-input"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            {!isLogin && (
+              <p id="password-help" className="mt-2 text-xs text-slate-600">
+                Use 8–128 characters.
+              </p>
+            )}
+          </div>
+          <Button type="submit" disabled={pending}>
+            {pending ? 'Please wait…' : isLogin ? 'Login' : 'Sign Up'}
+          </Button>
+          {message && <Feedback error={error}>{message}</Feedback>}
+        </form>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setIsLogin(!isLogin);
+            setMessage('');
+            setPassword('');
+          }}
+          className="mt-6 min-h-11 w-full rounded-lg text-sm font-medium text-blue-700 hover:underline disabled:opacity-60"
+        >
+          {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Login'}
+        </button>
+        <p className="mt-5 border-t border-slate-100 pt-5 text-center text-xs leading-5 text-slate-500">
+          Your documents stay private to your account.
+        </p>
+      </section>
+    </main>
   );
 }

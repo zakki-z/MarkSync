@@ -1,4 +1,3 @@
-
 import os
 from collections.abc import Generator
 
@@ -22,9 +21,7 @@ else:
     )
 
 connect_args = (
-    {"check_same_thread": False}
-    if str(database_url).startswith("sqlite")
-    else {}
+    {"check_same_thread": False} if str(database_url).startswith("sqlite") else {}
 )
 
 engine = create_engine(database_url, connect_args=connect_args)

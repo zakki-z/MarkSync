@@ -26,7 +26,11 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run format:check
       - run: bun run build
+      - run: bun x playwright install --with-deps chromium
+      - run: bun run test:e2e
 
   collaboration-service:
     name: Collaboration service (Bun)
@@ -41,7 +45,9 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - name: Type check
-        run: bunx tsc --noEmit
+        run: bun run typecheck
+      - run: bun run format:check
+      - run: bun test
 
   auth-service:
     name: Auth service (FastAPI)
@@ -56,8 +62,9 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/auth-service/pyproject.toml
       - run: uv python install 3.12
-      - run: uv sync --group dev
+      - run: uv sync --locked --group dev --python 3.12
       - run: uv run ruff check .
+      - run: uv run ruff format --check .
       - run: uv run mypy .
       - run: uv run pytest
 
@@ -80,3 +87,34 @@ jobs:
           cache: maven
           cache-dependency-path: backend/${{ matrix.service }}/pom.xml
       - run: ./mvnw -B verify
+
+  walking-skeleton:
+    name: Walking skeleton (Compose and Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Generate isolated local secrets
+        run: |
+          echo "JWT_SECRET_KEY=$(openssl rand -hex 32)" >> .env
+          echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> .env
+      - run: docker compose up --build -d
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - run: bun x playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Verify readiness and persistence across restarts
+        run: python3 scripts/verify-persistence.py
+      - run: bun x playwright test --config playwright.integration.config.ts
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: walking-skeleton-traces
+          path: frontend/test-results
+      - name: Stop the isolated CI stack
+        if: always()
+        run: docker compose down -v

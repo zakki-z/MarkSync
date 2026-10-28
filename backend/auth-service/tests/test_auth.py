@@ -205,3 +205,13 @@ def test_unconfigured_cors_origin_is_rejected() -> None:
     )
     assert res.status_code == 400
     assert "access-control-allow-origin" not in res.headers
+
+
+@pytest.mark.parametrize("password", ["", "short", "x" * 129])
+def test_signup_password_validation_never_echoes_credentials(password: str) -> None:
+    response = client.post(
+        "/auth/signup", json={"email": "safe@example.com", "password": password}
+    )
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid email or password length"}
+    assert "input" not in response.text

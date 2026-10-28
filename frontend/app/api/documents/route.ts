@@ -13,7 +13,9 @@ export async function GET(request: Request) {
     const documents: unknown = await response.json();
     if (!Array.isArray(documents)) return serviceUnavailable('Document Service');
     // Defense in depth; the backend also scopes this list to the JWT subject.
-    return Response.json(documents.filter((document) => document?.authorId === String(auth.user.id)));
+    return Response.json(
+      documents.filter((document) => document?.authorId === String(auth.user.id)),
+    );
   } catch {
     return serviceUnavailable('Document Service');
   }
