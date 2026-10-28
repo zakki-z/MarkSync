@@ -4,6 +4,8 @@ import com.example.document.dto.DocumentDTO;
 import com.example.document.service.DocumentService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,29 +28,29 @@ public class DocumentController {
     }
 
     @PostMapping
-    public ResponseEntity<DocumentDTO> create(@Valid @RequestBody DocumentDTO dto) {
-        DocumentDTO created = service.create(dto);
+    public ResponseEntity<DocumentDTO> create(@Valid @RequestBody DocumentDTO dto, @AuthenticationPrincipal Jwt jwt) {
+        DocumentDTO created = service.create(dto, jwt.getSubject());
         return ResponseEntity.created(URI.create("/api/documents/" + created.getId())).body(created);
     }
 
     @GetMapping
-    public ResponseEntity<List<DocumentDTO>> getAll() {
-        return ResponseEntity.ok(service.getAll());
+    public ResponseEntity<List<DocumentDTO>> getAll(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(service.getAll(jwt.getSubject()));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<DocumentDTO> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getById(id));
+    public ResponseEntity<DocumentDTO> getById(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(service.getById(id, jwt.getSubject()));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<DocumentDTO> update(@PathVariable Long id, @Valid @RequestBody DocumentDTO dto) {
-        return ResponseEntity.ok(service.update(id, dto));
+    public ResponseEntity<DocumentDTO> update(@PathVariable Long id, @Valid @RequestBody DocumentDTO dto, @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(service.update(id, dto, jwt.getSubject()));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        service.delete(id);
+    public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+        service.delete(id, jwt.getSubject());
         return ResponseEntity.noContent().build();
     }
 }

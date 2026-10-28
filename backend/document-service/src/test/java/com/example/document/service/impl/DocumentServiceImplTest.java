@@ -54,9 +54,10 @@ class DocumentServiceImplTest {
         when(dao.save(entity)).thenReturn(saved);
         when(mapper.toDTO(saved)).thenReturn(output);
 
-        DocumentDTO result = service.create(input);
+        DocumentDTO result = service.create(input, "123");
 
         assertSame(output, result);
+        assertEquals("123", input.getAuthorId());
         verify(validator).validateCreate(input);
         verify(mapper).toEntity(input);
         verify(dao).save(entity);
@@ -69,7 +70,7 @@ class DocumentServiceImplTest {
         doThrow(new BadRequestException("Invalid document"))
                 .when(validator).validateCreate(input);
 
-        assertThrows(BadRequestException.class, () -> service.create(input));
+        assertThrows(BadRequestException.class, () -> service.create(input, "123"));
 
         verifyNoInteractions(dao, mapper);
     }
@@ -81,23 +82,23 @@ class DocumentServiceImplTest {
         DocumentDTO firstDto = dto(1L, "First");
         DocumentDTO secondDto = dto(2L, "Second");
 
-        when(dao.findAll()).thenReturn(List.of(first, second));
+        when(dao.findAllByAuthorId("123")).thenReturn(List.of(first, second));
         when(mapper.toDTO(first)).thenReturn(firstDto);
         when(mapper.toDTO(second)).thenReturn(secondDto);
 
-        List<DocumentDTO> result = service.getAll();
+        List<DocumentDTO> result = service.getAll("123");
 
         assertEquals(List.of(firstDto, secondDto), result);
-        verify(dao).findAll();
+        verify(dao).findAllByAuthorId("123");
         verify(mapper).toDTO(first);
         verify(mapper).toDTO(second);
     }
 
     @Test
     void getAll_noDocuments_returnsEmptyList() {
-        when(dao.findAll()).thenReturn(List.of());
+        when(dao.findAllByAuthorId("123")).thenReturn(List.of());
 
-        List<DocumentDTO> result = service.getAll();
+        List<DocumentDTO> result = service.getAll("123");
 
         assertTrue(result.isEmpty());
         verifyNoInteractions(mapper, validator);
@@ -107,23 +108,23 @@ class DocumentServiceImplTest {
     void getById_existingDocument_returnsMappedDocument() {
         Document entity = document(5L, "Existing");
         DocumentDTO expected = dto(5L, "Existing");
-        when(dao.findById(5L)).thenReturn(Optional.of(entity));
+        when(dao.findByIdAndAuthorId(5L, "123")).thenReturn(Optional.of(entity));
         when(mapper.toDTO(entity)).thenReturn(expected);
 
-        DocumentDTO result = service.getById(5L);
+        DocumentDTO result = service.getById(5L, "123");
 
         assertSame(expected, result);
-        verify(dao).findById(5L);
+        verify(dao).findByIdAndAuthorId(5L, "123");
         verify(mapper).toDTO(entity);
     }
 
     @Test
     void getById_missingDocument_throwsResourceNotFound() {
-        when(dao.findById(99L)).thenReturn(Optional.empty());
+        when(dao.findByIdAndAuthorId(99L, "123")).thenReturn(Optional.empty());
 
         ResourceNotFoundException exception = assertThrows(
                 ResourceNotFoundException.class,
-                () -> service.getById(99L)
+                () -> service.getById(99L, "123")
         );
 
         assertEquals("Document not found: 99", exception.getMessage());
@@ -137,11 +138,11 @@ class DocumentServiceImplTest {
         Document existing = document(id, "Original");
         DocumentDTO expected = dto(id, "Updated");
 
-        when(dao.findById(id)).thenReturn(Optional.of(existing));
+        when(dao.findByIdAndAuthorId(id, "123")).thenReturn(Optional.of(existing));
         when(dao.saveAndFlush(existing)).thenReturn(existing);
         when(mapper.toDTO(existing)).thenReturn(expected);
 
-        DocumentDTO result = service.update(id, input);
+        DocumentDTO result = service.update(id, input, "123");
 
         assertSame(expected, result);
         InOrder order = inOrder(validator, mapper, dao);
@@ -154,9 +155,9 @@ class DocumentServiceImplTest {
     @Test
     void update_missingDocument_throwsResourceNotFound() {
         DocumentDTO input = dto(99L, "Updated");
-        when(dao.findById(99L)).thenReturn(Optional.empty());
+        when(dao.findByIdAndAuthorId(99L, "123")).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> service.update(99L, input));
+        assertThrows(ResourceNotFoundException.class, () -> service.update(99L, input, "123"));
 
         verify(dao, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
         verifyNoInteractions(mapper, validator);
@@ -167,11 +168,11 @@ class DocumentServiceImplTest {
         Long id = 8L;
         Document existing = document(id, "Original");
         DocumentDTO input = dto(9L, "Invalid update");
-        when(dao.findById(id)).thenReturn(Optional.of(existing));
+        when(dao.findByIdAndAuthorId(id, "123")).thenReturn(Optional.of(existing));
         doThrow(new BadRequestException("Document ID in body must match URL"))
                 .when(validator).validateUpdate(id, input, existing);
 
-        assertThrows(BadRequestException.class, () -> service.update(id, input));
+        assertThrows(BadRequestException.class, () -> service.update(id, input, "123"));
 
         verifyNoInteractions(mapper);
         verify(dao, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
@@ -179,22 +180,22 @@ class DocumentServiceImplTest {
 
     @Test
     void delete_existingDocument_deletesById() {
-        when(dao.existsById(3L)).thenReturn(true);
+        when(dao.findByIdAndAuthorId(3L, "123")).thenReturn(Optional.of(document(3L, "Owned")));
 
-        service.delete(3L);
+        service.delete(3L, "123");
 
-        verify(dao).existsById(3L);
+        verify(dao).findByIdAndAuthorId(3L, "123");
         verify(dao).deleteById(3L);
         verifyNoInteractions(mapper, validator);
     }
 
     @Test
     void delete_missingDocument_throwsWithoutDeleting() {
-        when(dao.existsById(99L)).thenReturn(false);
+        when(dao.findByIdAndAuthorId(99L, "123")).thenReturn(Optional.empty());
 
         ResourceNotFoundException exception = assertThrows(
                 ResourceNotFoundException.class,
-                () -> service.delete(99L)
+                () -> service.delete(99L, "123")
         );
 
         assertEquals("Document not found: 99", exception.getMessage());
@@ -205,7 +206,7 @@ class DocumentServiceImplTest {
         return DocumentDTO.builder()
                 .id(id)
                 .title(title)
-                .authorId("user-123")
+                .authorId("123")
                 .markdown("# Sample content")
                 .build();
     }
@@ -214,7 +215,7 @@ class DocumentServiceImplTest {
         return Document.builder()
                 .id(id)
                 .title(title)
-                .authorId("user-123")
+                .authorId("123")
                 .markdown("# Sample content")
                 .build();
     }

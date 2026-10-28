@@ -96,7 +96,7 @@ export default function DocumentsPage() {
   const guardUnsaved = () => !dirty || window.confirm('Discard unsaved changes?');
 
   const selectDocument = (document: DocumentDTO) => {
-    if (document.id === selectedId || !guardUnsaved()) return;
+    if (saving || deleting || document.id === selectedId || !guardUnsaved()) return;
     const nextDraft = { title: document.title, markdown: document.markdown };
     setSelectedId(document.id);
     setDraft(nextDraft);
@@ -106,7 +106,7 @@ export default function DocumentsPage() {
   };
 
   const startNew = () => {
-    if (!guardUnsaved()) return;
+    if (saving || deleting || !guardUnsaved()) return;
     setSelectedId(null);
     setDraft(emptyDraft());
     setOriginal(emptyDraft());
@@ -115,7 +115,7 @@ export default function DocumentsPage() {
   };
 
   const save = async () => {
-    if (!token || saving) return;
+    if (!token || saving || deleting) return;
     if (!draft.title.trim()) {
       setError('Please enter a document title.');
       return;
@@ -138,7 +138,7 @@ export default function DocumentsPage() {
   };
 
   const remove = async () => {
-    if (!token || selectedId === null || deleting) return;
+    if (!token || selectedId === null || deleting || saving) return;
     if (!window.confirm('Delete this document permanently?')) return;
     setDeleting(true); setError(''); setNotice('');
     try {
@@ -184,14 +184,14 @@ export default function DocumentsPage() {
           <div className="brand"><span className="brand-mark">M</span> MarkSync</div>
           <span className="sidebar-caption">Your workspace</span>
         </div>
-        <button className="button primary new-button" onClick={startNew}>+ New document</button>
+        <button className="button primary new-button" onClick={startNew} disabled={saving || deleting}>+ New document</button>
         <label className="search-label" htmlFor="document-search">Documents <span>{documents.length}</span></label>
         <input id="document-search" className="search-input" placeholder="Search documents…" value={search}
           onChange={(event) => setSearch(event.target.value)} />
         <div className="document-list" aria-label="Your documents">
           {!filtered.length && <p className="no-documents">{search ? 'No matching documents.' : 'No documents yet. Create your first one.'}</p>}
           {filtered.map((doc) => (
-            <button key={doc.id} type="button" onClick={() => selectDocument(doc)}
+            <button key={doc.id} type="button" onClick={() => selectDocument(doc)} disabled={saving || deleting}
               className={`document-item ${selectedId === doc.id ? 'selected' : ''}`}>
               <span className="document-icon" aria-hidden="true">▤</span>
               <span className="document-info"><strong>{doc.title}</strong><small>{prettyDate(doc.updatedAt || doc.createdAt)}</small></span>

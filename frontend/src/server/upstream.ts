@@ -3,7 +3,12 @@ export const authBase = (process.env.AUTH_SERVICE_URL ?? 'http://localhost:8000'
 export const documentBase = (process.env.DOCUMENT_SERVICE_URL ?? 'http://localhost:8082').replace(/\/$/, '');
 
 export async function fetchUpstream(url: string, init?: RequestInit): Promise<Response> {
-  return fetch(url, { ...init, cache: 'no-store' });
+  const timeout = AbortSignal.timeout(10_000);
+  return fetch(url, {
+    ...init,
+    cache: 'no-store',
+    signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
+  });
 }
 
 export async function relay(response: Response): Promise<Response> {

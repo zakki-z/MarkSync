@@ -3,7 +3,7 @@ import { authBase, documentBase, fetchUpstream, relay, serviceUnavailable } from
 type AuthUser = { id: number; email: string; role: string };
 type StoredDocument = { id: number; authorId: string; title: string; markdown: string };
 
-type AuthResult = { user: AuthUser } | { error: Response };
+type AuthResult = { user: AuthUser; authorization: string } | { error: Response };
 
 export async function authenticate(request: Request): Promise<AuthResult> {
   const authorization = request.headers.get('authorization');
@@ -22,15 +22,17 @@ export async function authenticate(request: Request): Promise<AuthResult> {
     if (!Number.isInteger(user.id)) {
       return { error: Response.json({ detail: 'Invalid user identity.' }, { status: 401 }) };
     }
-    return { user };
+    return { user, authorization };
   } catch {
     return { error: serviceUnavailable('Auth Service') };
   }
 }
 
-export async function readDocument(id: string): Promise<Response> {
+export async function readDocument(id: string, authorization: string): Promise<Response> {
   try {
-    return await fetchUpstream(`${documentBase}/api/documents/${encodeURIComponent(id)}`);
+    return await fetchUpstream(`${documentBase}/api/documents/${encodeURIComponent(id)}`, {
+      headers: { Authorization: authorization },
+    });
   } catch {
     return serviceUnavailable('Document Service');
   }
@@ -39,12 +41,13 @@ export async function readDocument(id: string): Promise<Response> {
 export async function checkOwnership(
   id: string,
   user: AuthUser,
+  authorization: string,
 ): Promise<{ document: StoredDocument } | { error: Response }> {
   try {
-    const response = await readDocument(id);
+    const response = await readDocument(id, authorization);
     if (!response.ok) return { error: await relay(response) };
     const document = (await response.json()) as StoredDocument;
-    // Temporary, frontend-proxy-only isolation for the local Task 1 demo.
+    // Defense in depth; the Document Service enforces ownership using the JWT subject.
     if (document.authorId !== String(user.id)) {
       return { error: Response.json({ detail: 'Document not found.' }, { status: 404 }) };
     }
@@ -76,14 +79,14 @@ export async function readDraft(request: Request): Promise<
 export async function writeDocument(
   path: string,
   method: 'POST' | 'PUT',
-  user: AuthUser,
+  authorization: string,
   draft: { title: string; markdown: string },
 ): Promise<Response> {
   try {
     const response = await fetchUpstream(`${documentBase}${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...draft, authorId: String(user.id) }),
+      headers: { 'Content-Type': 'application/json', Authorization: authorization },
+      body: JSON.stringify(draft),
     });
     return relay(response);
   } catch {

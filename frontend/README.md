@@ -33,7 +33,7 @@ The Document Service needs the routes below and a `DocumentDTO` with `id: number
 | PUT | `/api/documents/{id}` | Update |
 | DELETE | `/api/documents/{id}` | Delete |
 
-The frontend sends `{ title, markdown, authorId }` on writes, where `authorId` comes from the verified `/auth/me` response, **not the browser request body**. The Java backend should return the saved document with its ID and timestamps. A successful delete can return HTTP 204.
+The frontend sends `{ title, markdown }` on writes and forwards the bearer token to the Document Service. The backend verifies HS256 JWTs using the same `JWT_SECRET_KEY` as FastAPI, derives `authorId` from the numeric JWT subject, and enforces ownership for every CRUD operation. Configure the Document Service datasource using `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`. The Java backend should return the saved document with its ID and timestamps. A successful delete can return HTTP 204.
 
 ## Features
 
@@ -53,8 +53,8 @@ bunx playwright install chromium
 bun run test:e2e
 ```
 
-The browser tests mock backend replies and run the production build on port 3100. For a real smoke test, run both backends, log in, create a document, preview and save it, reload the page, then update and delete it. Test a second account to confirm the frontend filters documents by author.
+The browser tests mock backend replies and run the production build on port 3100. For a real smoke test, run both backends, log in, create a document, preview and save it, reload the page, then update and delete it. Test a second account to confirm both the proxy and direct backend requests enforce ownership.
 
 ## Important limitation
 
-This is a **local university walking skeleton**, not production security. The Java Document Service in the earlier CRUD implementation does not independently verify JWTs or enforce ownership. A caller who directly accesses the Java port can bypass the Next.js checks. Add server-side Java authentication and authorization before exposing either service publicly. `sessionStorage` is only an MVP session mechanism. The Markdown renderer is a safe basic subset, not full CommonMark. WebSocket presence is handled separately by the Collaboration Service.
+`sessionStorage` is only an MVP session mechanism. The Markdown renderer is a safe basic subset, not full CommonMark. WebSocket presence is handled separately by the Collaboration Service.

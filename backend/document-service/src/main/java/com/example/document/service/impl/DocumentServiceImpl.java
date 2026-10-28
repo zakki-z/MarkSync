@@ -27,25 +27,26 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional
-    public DocumentDTO create(DocumentDTO dto) {
+    public DocumentDTO create(DocumentDTO dto, String authorId) {
         validator.validateCreate(dto);
+        dto.setAuthorId(authorId);
         return mapper.toDTO(dao.save(mapper.toEntity(dto)));
     }
 
     @Override
-    public List<DocumentDTO> getAll() {
-        return dao.findAll().stream().map(mapper::toDTO).toList();
+    public List<DocumentDTO> getAll(String authorId) {
+        return dao.findAllByAuthorId(authorId).stream().map(mapper::toDTO).toList();
     }
 
     @Override
-    public DocumentDTO getById(Long id) {
-        return mapper.toDTO(findDocument(id));
+    public DocumentDTO getById(Long id, String authorId) {
+        return mapper.toDTO(findDocument(id, authorId));
     }
 
     @Override
     @Transactional
-    public DocumentDTO update(Long id, DocumentDTO dto) {
-        Document document = findDocument(id);
+    public DocumentDTO update(Long id, DocumentDTO dto, String authorId) {
+        Document document = findDocument(id, authorId);
         validator.validateUpdate(id, dto, document);
         mapper.updateEntity(document, dto);
         return mapper.toDTO(dao.saveAndFlush(document));
@@ -53,15 +54,13 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional
-    public void delete(Long id) {
-        if (!dao.existsById(id)) {
-            throw new ResourceNotFoundException("Document not found: " + id);
-        }
+    public void delete(Long id, String authorId) {
+        findDocument(id, authorId);
         dao.deleteById(id);
     }
 
-    private Document findDocument(Long id) {
-        return dao.findById(id).orElseThrow(() ->
+    private Document findDocument(Long id, String authorId) {
+        return dao.findByIdAndAuthorId(id, authorId).orElseThrow(() ->
                 new ResourceNotFoundException("Document not found: " + id));
     }
 }

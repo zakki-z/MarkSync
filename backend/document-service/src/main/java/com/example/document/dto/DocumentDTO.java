@@ -23,7 +23,6 @@ public class DocumentDTO {
     @Size(max = 200, message = "Title must be at most 200 characters")
     private String title;
 
-    @NotBlank(message = "Author ID is required")
     @Size(max = 120, message = "Author ID must be at most 120 characters")
     private String authorId;
 

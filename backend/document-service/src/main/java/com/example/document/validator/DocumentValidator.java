@@ -17,7 +17,7 @@ public class DocumentValidator {
         if (dto.getId() != null && !id.equals(dto.getId())) {
             throw new BadRequestException("Document ID in body must match URL");
         }
-        if (!current.getAuthorId().equals(dto.getAuthorId().trim())) {
+        if (dto.getAuthorId() != null && !current.getAuthorId().equals(dto.getAuthorId().trim())) {
             throw new BadRequestException("Document author cannot be changed");
         }
     }
