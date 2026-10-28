@@ -7,6 +7,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+database_url: str | URL
 
 if DATABASE_URL:
     database_url = DATABASE_URL
