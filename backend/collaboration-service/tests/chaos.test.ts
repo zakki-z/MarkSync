@@ -29,8 +29,9 @@ class ChaosNetwork {
   }
 
   applyLocalEdit(op: EditOp, latencySeed: number, shouldDrop: boolean) {
-    const doc = this.clients[op.client];
-    const ytext = this.texts[op.client];
+    // 加上 ! 確保 TypeScript 知道物件絕對存在
+    const doc = this.clients[op.client]!;
+    const ytext = this.texts[op.client]!;
 
     let capturedUpdate: Uint8Array | null = null;
     const updateHandler = (update: Uint8Array, origin: any) => {
@@ -76,9 +77,12 @@ class ChaosNetwork {
 
   deliverUpTo(timeLimit: number) {
     this.queue.sort((a, b) => a.deliverAt - b.deliverAt);
-    while (this.queue.length > 0 && this.queue[0].deliverAt <= timeLimit) {
+    while (this.queue.length > 0 && this.queue[0]!.deliverAt <= timeLimit) {
       const pkt = this.queue.shift()!;
-      Y.applyUpdate(this.clients[pkt.toClient], pkt.update, "remote");
+      const targetDoc = this.clients[pkt.toClient];
+      if (targetDoc) {
+        Y.applyUpdate(targetDoc, pkt.update, "remote");
+      }
     }
   }
 
@@ -86,14 +90,18 @@ class ChaosNetwork {
     this.deliverUpTo(Infinity);
     for (let i = 0; i < this.clients.length; i++) {
       for (let j = i + 1; j < this.clients.length; j++) {
-        const svI = Y.encodeStateVector(this.clients[i]);
-        const svJ = Y.encodeStateVector(this.clients[j]);
+        const docI = this.clients[i];
+        const docJ = this.clients[j];
+        if (!docI || !docJ) continue;
 
-        const diffForJ = Y.encodeStateAsUpdate(this.clients[i], svJ);
-        const diffForI = Y.encodeStateAsUpdate(this.clients[j], svI);
+        const svI = Y.encodeStateVector(docI);
+        const svJ = Y.encodeStateVector(docJ);
 
-        Y.applyUpdate(this.clients[j], diffForJ, "sync");
-        Y.applyUpdate(this.clients[i], diffForI, "sync");
+        const diffForJ = Y.encodeStateAsUpdate(docI, svJ);
+        const diffForI = Y.encodeStateAsUpdate(docJ, svI);
+
+        Y.applyUpdate(docJ, diffForJ, "sync");
+        Y.applyUpdate(docI, diffForI, "sync");
       }
     }
   }
@@ -140,9 +148,12 @@ describe("Part B: Property-Based & Chaos Testing for MarkSync CRDT", () => {
 
           network.settleAndSyncAll();
 
-          const referenceState = network.texts[0].toString();
+          const referenceText = network.texts[0];
+          const referenceState = referenceText ? referenceText.toString() : "";
+          
           for (let i = 1; i < NUM_CLIENTS; i++) {
-            expect(network.texts[i].toString()).toBe(referenceState);
+            const targetText = network.texts[i];
+            expect(targetText ? targetText.toString() : "").toBe(referenceState);
           }
         }
       ),
