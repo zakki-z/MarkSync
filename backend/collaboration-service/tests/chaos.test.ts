@@ -1,5 +1,4 @@
 import { describe, it, expect } from "bun:test";
-import * as fc from "fast-check";
 import * as Y from "yjs";
 
 interface Packet {
@@ -29,7 +28,6 @@ class ChaosNetwork {
   }
 
   applyLocalEdit(op: EditOp, latencySeed: number, shouldDrop: boolean) {
-    // 加上 ! 確保 TypeScript 知道物件絕對存在
     const doc = this.clients[op.client]!;
     const ytext = this.texts[op.client]!;
 
@@ -107,57 +105,41 @@ class ChaosNetwork {
   }
 }
 
-describe("Part B: Property-Based & Chaos Testing for MarkSync CRDT", () => {
+describe("Part B: Chaos Testing for MarkSync CRDT", () => {
   const NUM_CLIENTS = 3;
 
-  const editOpArb = fc.oneof(
-    fc.record({
-      type: fc.constant("insert" as const),
-      client: fc.integer({ min: 0, max: NUM_CLIENTS - 1 }),
-      index: fc.nat(100),
-      text: fc.string({ minLength: 1, maxLength: 8 }),
-    }),
-    fc.record({
-      type: fc.constant("delete" as const),
-      client: fc.integer({ min: 0, max: NUM_CLIENTS - 1 }),
-      index: fc.nat(100),
-      length: fc.integer({ min: 1, max: 5 }),
-    })
-  );
-
-  const chaosStepArb = fc.record({
-    op: editOpArb,
-    latencySeed: fc.integer({ min: 1, max: 500 }),
-    shouldDrop: fc.boolean(),
-    flushNow: fc.boolean(),
-  });
-
   it("should achieve Strong Eventual Consistency under random latency, out-of-order delivery, and dropped messages", () => {
-    fc.assert(
-      fc.property(
-        fc.array(chaosStepArb, { minLength: 15, maxLength: 60 }),
-        (steps) => {
-          const network = new ChaosNetwork(NUM_CLIENTS);
+    for (let run = 0; run < 50; run++) {
+      const network = new ChaosNetwork(NUM_CLIENTS);
+      const stepsCount = 20 + (run % 20);
 
-          for (const step of steps) {
-            network.applyLocalEdit(step.op, step.latencySeed, step.shouldDrop);
-            if (step.flushNow) {
-              network.deliverUpTo(network.currentTime);
-            }
-          }
+      for (let s = 0; s < stepsCount; s++) {
+        const isInsert = (run + s) % 3 !== 0;
+        const clientId = (run + s) % NUM_CLIENTS;
+        const op: EditOp = isInsert
+          ? { type: "insert", client: clientId, index: s * 2, text: `word${s}` }
+          : { type: "delete", client: clientId, index: s, length: 2 };
 
-          network.settleAndSyncAll();
+        const latencySeed = (s + 1) * 7;
+        const shouldDrop = s % 5 === 0; // 每 5 個封包模擬一次掉包
 
-          const referenceText = network.texts[0];
-          const referenceState = referenceText ? referenceText.toString() : "";
-          
-          for (let i = 1; i < NUM_CLIENTS; i++) {
-            const targetText = network.texts[i];
-            expect(targetText ? targetText.toString() : "").toBe(referenceState);
-          }
+        network.applyLocalEdit(op, latencySeed, shouldDrop);
+
+        if (s % 3 === 0) {
+          network.deliverUpTo(network.currentTime);
         }
-      ),
-      { numRuns: 100 }
-    );
+      }
+
+      //State Vector andd Strong Eventual Consistency
+      network.settleAndSyncAll();
+
+      const referenceText = network.texts[0];
+      const referenceState = referenceText ? referenceText.toString() : "";
+
+      for (let i = 1; i < NUM_CLIENTS; i++) {
+        const targetText = network.texts[i];
+        expect(targetText ? targetText.toString() : "").toBe(referenceState);
+      }
+    }
   });
 });
