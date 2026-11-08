@@ -9,11 +9,12 @@ MarkSync is a university software engineering project for private Markdown docum
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 | Authentication UI, document workspace, Markdown preview, same-origin API adapters |
 | Authentication | Python 3.12, FastAPI, SQLAlchemy, Argon2, JWT | Persistent accounts and signed, one-hour HS256 access tokens |
 | Documents | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Owner-scoped CRUD and saved Markdown |
+| Workspaces | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Foundation only: schema for workspaces, memberships and invitations, plus JWT-protected service shell; no workspace endpoints yet |
 | Collaboration | Bun 1.3.14, TypeScript, native WebSockets | Authenticated document rooms, deduplicated presence, heartbeat |
-| Storage | PostgreSQL 17 | Separate `marksync_auth` and `marksync_documents` databases in a persistent volume |
+| Storage | PostgreSQL 17 | Separate `marksync_auth`, `marksync_documents` and `marksync_workspaces` databases in a persistent volume |
 | Gateway | Nginx, Docker Compose | One browser origin for pages, APIs, and `/ws` upgrades |
 
-Workspace, AI, and Notification directories remain future service skeletons. They are not started by Compose. The existing Workspace Maven CI check is preserved.
+AI and Notification directories remain future service skeletons and are not started by Compose. The Workspace service is started by Compose (internal port 8083, not routed through Nginx yet) and its Maven CI check is preserved.
 
 Browser traffic goes through Nginx. `/auth` is a Next.js page; `/api/auth/*` is a Next.js adapter for FastAPI's internal `/auth/*` endpoints. `/api/documents/*` forwards authenticated requests to Spring. `/ws` goes directly to Bun. Container hostnames are used only between services.
 
@@ -36,7 +37,7 @@ Open **http://127.0.0.1:8080** after the services finish starting. The initial b
 
 | Variable | Configuration |
 | --- | --- |
-| `JWT_SECRET_KEY` | Required, unique secret of at least 32 characters; shared by Auth and Documents |
+| `JWT_SECRET_KEY` | Required, unique secret of at least 32 characters; shared by Auth, Documents and Workspaces |
 | `POSTGRES_PASSWORD` | Required; generate a hex value to avoid URL-encoding issues in the database URL |
 | `PORT` | Optional gateway port, default `8080` |
 | `APP_ORIGINS` | Comma-separated exact browser origins; defaults to `http://127.0.0.1:8080,http://localhost:8080` |
@@ -44,7 +45,7 @@ Open **http://127.0.0.1:8080** after the services finish starting. The initial b
 | `AUTH_SERVICE_URL` | Internal FastAPI URL, set by Compose to `http://auth:8000` |
 | `DOCUMENT_SERVICE_URL` | Internal Spring URL, set by Compose to `http://document:8082` |
 | `DATABASE_URL` | Auth SQLAlchemy URL, set by Compose |
-| `SPRING_DATASOURCE_*` | Document database URL/user/password, set by Compose |
+| `SPRING_DATASOURCE_*` | Document and Workspace database URL/user/password, set by Compose |
 | `CORS_ORIGINS` | Explicit allowed origins for direct FastAPI development; the browser normally uses the same-origin adapter |
 
 If port 8080 is occupied, set both `PORT=18080` and `APP_ORIGINS=http://127.0.0.1:18080` in `.env`, then use that URL. For a standalone frontend, copy `frontend/env.sample` to `frontend/.env.local`, start the backend services, and run `bun install --frozen-lockfile && bun run dev` in `frontend`. Presence requires Nginx's `/ws` route; Compose is the supported integrated development environment.
@@ -54,6 +55,15 @@ Secrets and local environment files must not be committed. Use the same generate
 ### Persistence and migrations
 
 `postgres_data` holds both databases. `docker compose down` preserves it; `docker compose down -v` deletes it. Auth creates missing user tables without deleting existing rows. Document schema is managed by `V1__create_documents.sql`; Hibernate only validates it. Flyway baselines an existing Hibernate-managed schema at version 0, then applies the non-destructive migration and owner index. Existing incompatible schemas fail validation rather than being silently rewritten.
+
+The Workspace schema is managed by `V1__create_workspace_schema.sql` (tables `workspaces`, `workspace_members`, `workspace_invitations`); Hibernate only validates it. `infra/postgres/init.sql` creates `marksync_workspaces` only when the PostgreSQL volume is first initialised. If you already have a `postgres_data` volume, either run `docker compose down -v` (deletes all data) or create it once by hand:
+
+```sh
+docker compose exec postgres psql -U marksync -d postgres -c "CREATE DATABASE marksync_workspaces;"
+docker compose up -d workspace
+```
+
+User ids are stored as plain strings with no foreign keys, because users live in the separate Auth database. The "one pending invitation per workspace and email" rule is enforced by the service layer, not the database.
 
 ## Demonstrating Task 1
 
@@ -98,6 +108,13 @@ Documents (Java 21; H2 runs the real Flyway migration for isolated tests):
 
 ```sh
 cd backend/document-service
+./mvnw -B verify
+```
+
+Workspaces (Java 21; H2 runs the real Flyway migration and checks the schema constraints):
+
+```sh
+cd backend/workspace-service
 ./mvnw -B verify
 ```
 
