@@ -44,6 +44,7 @@ Open **http://127.0.0.1:8080** after the services finish starting. The initial b
 | `COOKIE_SECURE` | Default `false` for local HTTP; set `true` when serving HTTPS |
 | `AUTH_SERVICE_URL` | Internal FastAPI URL, set by Compose to `http://auth:8000` |
 | `DOCUMENT_SERVICE_URL` | Internal Spring URL, set by Compose to `http://document:8082` |
+| `WORKSPACE_SERVICE_URL` | Internal Spring URL, set by Compose to `http://workspace:8083` |
 | `DATABASE_URL` | Auth SQLAlchemy URL, set by Compose |
 | `SPRING_DATASOURCE_*` | Document and Workspace database URL/user/password, set by Compose |
 | `CORS_ORIGINS` | Explicit allowed origins for direct FastAPI development; the browser normally uses the same-origin adapter |
