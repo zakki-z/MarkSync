@@ -24,6 +24,11 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    @ExceptionHandler(WorkspaceServiceUnavailableException.class)
+    public ResponseEntity<ProblemDetail> workspaceUnavailable(WorkspaceServiceUnavailableException ex) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> validation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()

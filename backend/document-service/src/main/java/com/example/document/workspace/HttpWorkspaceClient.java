@@ -4,11 +4,13 @@ import com.example.document.exception.WorkspaceServiceUnavailableException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 public class HttpWorkspaceClient implements WorkspaceClient {
@@ -40,6 +42,23 @@ public class HttpWorkspaceClient implements WorkspaceClient {
         } catch (RestClientException e) {
             throw new WorkspaceServiceUnavailableException("Workspace service is unavailable", e);
         }
+    }
+
+    @Override
+    public Optional<WorkspaceRole> roleOf(String userId, Long workspaceId) {
+        try {
+            Membership membership = http.get().uri("/api/workspaces/{id}/membership", workspaceId)
+                    .header("Authorization", "Bearer " + tokens.issueFor(userId))
+                    .retrieve().body(Membership.class);
+            return Optional.of(membership.role());
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (RestClientException e) {
+            throw new WorkspaceServiceUnavailableException("Workspace service is unavailable", e);
+        }
+    }
+
+    private record Membership(WorkspaceRole role) {
     }
 
     private record WorkspaceSummary(Long id, String name, String ownerId) {

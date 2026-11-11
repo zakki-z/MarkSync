@@ -6,13 +6,14 @@ import com.example.document.entity.Document;
 import com.example.document.exception.BadRequestException;
 import com.example.document.exception.ResourceNotFoundException;
 import com.example.document.mapper.DocumentMapper;
+import com.example.document.policy.DocumentAccessPolicy;
 import com.example.document.validator.DocumentValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
 import java.util.Optional;
@@ -20,9 +21,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -30,194 +30,171 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentServiceImplTest {
+    private static final String USER = "123";
+    private static final Long WORKSPACE = 4L;
 
     @Mock
     private DocumentDAO dao;
-
     @Mock
     private DocumentMapper mapper;
-
     @Mock
     private DocumentValidator validator;
+    @Mock
+    private DocumentAccessPolicy policy;
 
     @InjectMocks
     private DocumentServiceImpl service;
 
     @Test
-    void create_validDocument_validatesMapsAndSaves() {
-        DocumentDTO input = dto(null, "First document");
-        Document entity = document(null, "First document");
-        Document saved = document(1L, "First document");
-        DocumentDTO output = dto(1L, "First document");
-
+    void create_allowed_validatesAssignsWorkspaceAndSaves() {
+        DocumentDTO input = dto(null);
+        Document entity = document(null);
+        Document saved = document(1L);
+        DocumentDTO output = dto(1L);
+        when(policy.canCreateIn(USER, WORKSPACE)).thenReturn(true);
         when(mapper.toEntity(input)).thenReturn(entity);
         when(dao.save(entity)).thenReturn(saved);
-        when(mapper.toDTO(saved)).thenReturn(output);
+        when(mapper.toDTO(saved, true)).thenReturn(output);
 
-        DocumentDTO result = service.create(4L, input, "123");
+        assertSame(output, service.create(WORKSPACE, input, USER));
 
-        assertSame(output, result);
-        assertEquals("123", input.getAuthorId());
-        assertEquals(4L, input.getWorkspaceId());
+        assertEquals(USER, input.getAuthorId());
+        assertEquals(WORKSPACE, input.getWorkspaceId());
         verify(validator).validateCreate(input);
-        verify(mapper).toEntity(input);
-        verify(dao).save(entity);
-        verify(mapper).toDTO(saved);
+    }
+
+    @Test
+    void create_denied_doesNotValidateOrSave() {
+        when(policy.canCreateIn(USER, WORKSPACE)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> service.create(WORKSPACE, dto(null), USER));
+
+        verifyNoInteractions(dao, mapper, validator);
     }
 
     @Test
     void create_invalidDocument_doesNotSave() {
-        DocumentDTO input = dto(null, "Invalid document");
-        doThrow(new BadRequestException("Invalid document"))
-                .when(validator).validateCreate(input);
+        DocumentDTO input = dto(null);
+        when(policy.canCreateIn(USER, WORKSPACE)).thenReturn(true);
+        doThrow(new BadRequestException("Invalid document")).when(validator).validateCreate(input);
 
-        assertThrows(BadRequestException.class, () -> service.create(4L, input, "123"));
+        assertThrows(BadRequestException.class, () -> service.create(WORKSPACE, input, USER));
 
         verifyNoInteractions(dao, mapper);
     }
 
     @Test
-    void getAll_returnsMappedDocuments() {
-        Document first = document(1L, "First");
-        Document second = document(2L, "Second");
-        DocumentDTO firstDto = dto(1L, "First");
-        DocumentDTO secondDto = dto(2L, "Second");
+    void getAll_member_returnsMappedDocumentsWithWorkspaceEditRights() {
+        Document first = document(1L);
+        Document second = document(2L);
+        when(policy.canListIn(USER, WORKSPACE)).thenReturn(true);
+        when(policy.canCreateIn(USER, WORKSPACE)).thenReturn(false);
+        when(dao.findAllByWorkspaceId(WORKSPACE)).thenReturn(List.of(first, second));
+        when(mapper.toDTO(first, false)).thenReturn(dto(1L));
+        when(mapper.toDTO(second, false)).thenReturn(dto(2L));
 
-        when(dao.findAllByWorkspaceIdAndAuthorId(4L, "123")).thenReturn(List.of(first, second));
-        when(mapper.toDTO(first)).thenReturn(firstDto);
-        when(mapper.toDTO(second)).thenReturn(secondDto);
-
-        List<DocumentDTO> result = service.getAll(4L, "123");
-
-        assertEquals(List.of(firstDto, secondDto), result);
-        verify(dao).findAllByWorkspaceIdAndAuthorId(4L, "123");
-        verify(mapper).toDTO(first);
-        verify(mapper).toDTO(second);
+        assertEquals(List.of(dto(1L).getId(), dto(2L).getId()),
+                service.getAll(WORKSPACE, USER).stream().map(DocumentDTO::getId).toList());
     }
 
     @Test
-    void getAll_noDocuments_returnsEmptyList() {
-        when(dao.findAllByWorkspaceIdAndAuthorId(4L, "123")).thenReturn(List.of());
+    void getAll_denied_doesNotQuery() {
+        when(policy.canListIn(null, WORKSPACE)).thenReturn(false);
 
-        List<DocumentDTO> result = service.getAll(4L, "123");
+        assertThrows(AccessDeniedException.class, () -> service.getAll(WORKSPACE, null));
 
-        assertTrue(result.isEmpty());
-        verifyNoInteractions(mapper, validator);
+        verifyNoInteractions(dao, mapper);
     }
 
     @Test
-    void getById_existingDocument_returnsMappedDocument() {
-        Document entity = document(5L, "Existing");
-        DocumentDTO expected = dto(5L, "Existing");
-        when(dao.findByIdAndAuthorId(5L, "123")).thenReturn(Optional.of(entity));
-        when(mapper.toDTO(entity)).thenReturn(expected);
+    void getById_readable_returnsDocumentWithEditRights() {
+        Document entity = document(5L);
+        DocumentDTO expected = dto(5L);
+        when(dao.findById(5L)).thenReturn(Optional.of(entity));
+        when(policy.canRead(USER, entity)).thenReturn(true);
+        when(policy.canEdit(USER, entity)).thenReturn(false);
+        when(mapper.toDTO(entity, false)).thenReturn(expected);
 
-        DocumentDTO result = service.getById(5L, "123");
-
-        assertSame(expected, result);
-        verify(dao).findByIdAndAuthorId(5L, "123");
-        verify(mapper).toDTO(entity);
+        assertSame(expected, service.getById(5L, USER));
     }
 
     @Test
-    void getById_missingDocument_throwsResourceNotFound() {
-        when(dao.findByIdAndAuthorId(99L, "123")).thenReturn(Optional.empty());
+    void getById_notReadable_throwsAccessDenied() {
+        Document entity = document(5L);
+        when(dao.findById(5L)).thenReturn(Optional.of(entity));
+        when(policy.canRead(null, entity)).thenReturn(false);
 
-        ResourceNotFoundException exception = assertThrows(
-                ResourceNotFoundException.class,
-                () -> service.getById(99L, "123")
-        );
-
-        assertEquals("Document not found: 99", exception.getMessage());
-        verifyNoInteractions(mapper, validator);
-    }
-
-    @Test
-    void update_existingDocument_validatesMapsAndFlushes() {
-        Long id = 7L;
-        DocumentDTO input = dto(id, "Updated");
-        Document existing = document(id, "Original");
-        DocumentDTO expected = dto(id, "Updated");
-
-        when(dao.findByIdAndAuthorId(id, "123")).thenReturn(Optional.of(existing));
-        when(dao.saveAndFlush(existing)).thenReturn(existing);
-        when(mapper.toDTO(existing)).thenReturn(expected);
-
-        DocumentDTO result = service.update(id, input, "123");
-
-        assertSame(expected, result);
-        InOrder order = inOrder(validator, mapper, dao);
-        order.verify(validator).validateUpdate(id, input, existing);
-        order.verify(mapper).updateEntity(existing, input);
-        order.verify(dao).saveAndFlush(existing);
-        verify(mapper).toDTO(existing);
-    }
-
-    @Test
-    void update_missingDocument_throwsResourceNotFound() {
-        DocumentDTO input = dto(99L, "Updated");
-        when(dao.findByIdAndAuthorId(99L, "123")).thenReturn(Optional.empty());
-
-        assertThrows(ResourceNotFoundException.class, () -> service.update(99L, input, "123"));
-
-        verify(dao, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
-        verifyNoInteractions(mapper, validator);
-    }
-
-    @Test
-    void update_invalidDocument_doesNotChangeOrSave() {
-        Long id = 8L;
-        Document existing = document(id, "Original");
-        DocumentDTO input = dto(9L, "Invalid update");
-        when(dao.findByIdAndAuthorId(id, "123")).thenReturn(Optional.of(existing));
-        doThrow(new BadRequestException("Document ID in body must match URL"))
-                .when(validator).validateUpdate(id, input, existing);
-
-        assertThrows(BadRequestException.class, () -> service.update(id, input, "123"));
+        assertThrows(AccessDeniedException.class, () -> service.getById(5L, null));
 
         verifyNoInteractions(mapper);
-        verify(dao, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
-    void delete_existingDocument_deletesById() {
-        when(dao.findByIdAndAuthorId(3L, "123")).thenReturn(Optional.of(document(3L, "Owned")));
+    void getById_missing_throwsResourceNotFound() {
+        when(dao.findById(99L)).thenReturn(Optional.empty());
 
-        service.delete(3L, "123");
-
-        verify(dao).findByIdAndAuthorId(3L, "123");
-        verify(dao).deleteById(3L);
-        verifyNoInteractions(mapper, validator);
-    }
-
-    @Test
-    void delete_missingDocument_throwsWithoutDeleting() {
-        when(dao.findByIdAndAuthorId(99L, "123")).thenReturn(Optional.empty());
-
-        ResourceNotFoundException exception = assertThrows(
-                ResourceNotFoundException.class,
-                () -> service.delete(99L, "123")
-        );
+        ResourceNotFoundException exception =
+                assertThrows(ResourceNotFoundException.class, () -> service.getById(99L, USER));
 
         assertEquals("Document not found: 99", exception.getMessage());
-        verify(dao, never()).deleteById(99L);
+        verifyNoInteractions(policy, mapper);
     }
 
-    private static DocumentDTO dto(Long id, String title) {
-        return DocumentDTO.builder()
-                .id(id)
-                .title(title)
-                .authorId("123")
-                .markdown("# Sample content")
-                .build();
+    @Test
+    void update_editable_validatesMapsAndFlushes() {
+        Document existing = document(7L);
+        DocumentDTO input = dto(7L);
+        DocumentDTO expected = dto(7L);
+        when(dao.findById(7L)).thenReturn(Optional.of(existing));
+        when(policy.canEdit(USER, existing)).thenReturn(true);
+        when(dao.saveAndFlush(existing)).thenReturn(existing);
+        when(mapper.toDTO(existing, true)).thenReturn(expected);
+
+        assertSame(expected, service.update(7L, input, USER));
+
+        verify(validator).validateUpdate(7L, input, existing);
+        verify(mapper).updateEntity(existing, input);
     }
 
-    private static Document document(Long id, String title) {
-        return Document.builder()
-                .id(id)
-                .title(title)
-                .authorId("123")
-                .markdown("# Sample content")
-                .build();
+    @Test
+    void update_notEditable_doesNotChangeOrSave() {
+        Document existing = document(7L);
+        when(dao.findById(7L)).thenReturn(Optional.of(existing));
+        when(policy.canEdit(USER, existing)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> service.update(7L, dto(7L), USER));
+
+        verifyNoInteractions(mapper, validator);
+        verify(dao, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void delete_editable_deletesById() {
+        Document existing = document(3L);
+        when(dao.findById(3L)).thenReturn(Optional.of(existing));
+        when(policy.canEdit(USER, existing)).thenReturn(true);
+
+        service.delete(3L, USER);
+
+        verify(dao).deleteById(3L);
+    }
+
+    @Test
+    void delete_notEditable_doesNotDelete() {
+        Document existing = document(3L);
+        when(dao.findById(3L)).thenReturn(Optional.of(existing));
+        when(policy.canEdit(USER, existing)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> service.delete(3L, USER));
+
+        verify(dao, never()).deleteById(any());
+    }
+
+    private static DocumentDTO dto(Long id) {
+        return DocumentDTO.builder().id(id).title("Title").authorId(USER).markdown("# Text").build();
+    }
+
+    private static Document document(Long id) {
+        return Document.builder().id(id).title("Title").authorId(USER).workspaceId(WORKSPACE).markdown("# Text").build();
     }
 }

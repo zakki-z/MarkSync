@@ -1,6 +1,7 @@
 package com.example.workspace.service;
 
 import com.example.workspace.dto.CreateWorkspaceRequest;
+import com.example.workspace.dto.MembershipResponse;
 import com.example.workspace.dto.UpdateWorkspaceRequest;
 import com.example.workspace.dto.WorkspaceResponse;
 import com.example.workspace.entity.Workspace;
@@ -50,6 +51,12 @@ public class WorkspaceService {
 
     public WorkspaceResponse get(Long id, String userId) {
         return WorkspaceResponse.from(findVisible(id, userId));
+    }
+
+    public MembershipResponse membership(Long id, String userId) {
+        return members.findByWorkspaceIdAndUserId(id, userId)
+                .map(member -> new MembershipResponse(member.getRole()))
+                .orElseThrow(() -> notFound(id));
     }
 
     @Transactional

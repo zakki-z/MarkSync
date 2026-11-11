@@ -17,13 +17,14 @@ public class DocumentMapper {
                 .build();
     }
 
-    public DocumentDTO toDTO(Document document) {
+    public DocumentDTO toDTO(Document document, boolean canEdit) {
         return DocumentDTO.builder()
                 .id(document.getId())
                 .title(document.getTitle())
                 .authorId(document.getAuthorId())
                 .workspaceId(document.getWorkspaceId())
                 .visibility(document.getVisibility())
+                .canEdit(canEdit)
                 .markdown(document.getMarkdown())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())

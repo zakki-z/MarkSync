@@ -35,6 +35,9 @@ public class DocumentDTO {
     @Size(max = 1000000, message = "Markdown is too long")
     private String markdown;
 
+    /** Response only: whether the caller may edit this document. */
+    private Boolean canEdit;
+
     private Instant createdAt;
     private Instant updatedAt;
 }

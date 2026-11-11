@@ -119,6 +119,20 @@ class WorkspaceApiTests {
     }
 
     @Test
+    void membershipReportsTheCallersRoleAndHidesNonMembers() throws Exception {
+        String location = createdLocation(owner, "Team", "PUBLIC");
+        addMember(location, "9", WorkspaceRole.VIEWER);
+
+        mvc.perform(get(location + "/membership").header("Authorization", owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("OWNER"));
+        mvc.perform(get(location + "/membership").header("Authorization", token("9")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("VIEWER"));
+        mvc.perform(get(location + "/membership").header("Authorization", stranger))
+                .andExpect(status().isNotFound());
+        mvc.perform(get(location + "/membership")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void nonOwnerMemberCannotUpdateOrDelete() throws Exception {
         String location = createdLocation(owner, "Shared", "PRIVATE");
         addMember(location, "8", WorkspaceRole.EDITOR);

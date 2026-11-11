@@ -24,12 +24,12 @@ public class DocumentDAO {
         return repository.saveAndFlush(document);
     }
 
-    public List<Document> findAllByWorkspaceIdAndAuthorId(Long workspaceId, String authorId) {
-        return repository.findAllByWorkspaceIdAndAuthorId(workspaceId, authorId, Sort.by(Sort.Direction.DESC, "updatedAt"));
+    public List<Document> findAllByWorkspaceId(Long workspaceId) {
+        return repository.findAllByWorkspaceId(workspaceId, Sort.by(Sort.Direction.DESC, "updatedAt"));
     }
 
-    public Optional<Document> findByIdAndAuthorId(Long id, String authorId) {
-        return repository.findByIdAndAuthorId(id, authorId);
+    public Optional<Document> findById(Long id) {
+        return repository.findById(id);
     }
 
     public void deleteById(Long id) {

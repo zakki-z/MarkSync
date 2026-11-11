@@ -1,6 +1,7 @@
 package com.example.document.migration;
 
 import com.example.document.workspace.WorkspaceClient;
+import com.example.document.workspace.WorkspaceRole;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,8 +27,12 @@ class DocumentWorkspaceMigrationTests {
     private JdbcTemplate appJdbc;
 
     private final Map<String, Long> personalWorkspaces = new HashMap<>();
-    private final WorkspaceClient workspaces = ownerId ->
-            personalWorkspaces.computeIfAbsent(ownerId, id -> 100L + personalWorkspaces.size());
+    private final WorkspaceClient workspaces = new StubWorkspaceClient() {
+        @Override
+        public Long findOrCreatePersonalWorkspace(String ownerId) {
+            return personalWorkspaces.computeIfAbsent(ownerId, id -> 100L + personalWorkspaces.size());
+        }
+    };
 
     private JdbcTemplate jdbc;
     private DriverManagerDataSource dataSource;
@@ -81,8 +87,11 @@ class DocumentWorkspaceMigrationTests {
     void failsWithoutLosingDataWhenTheWorkspaceServiceIsDown() {
         migrateTo("1");
         seed("7", "A");
-        WorkspaceClient down = ownerId -> {
-            throw new IllegalStateException("workspace service unavailable");
+        WorkspaceClient down = new StubWorkspaceClient() {
+            @Override
+            public Long findOrCreatePersonalWorkspace(String ownerId) {
+                throw new IllegalStateException("workspace service unavailable");
+            }
         };
 
         assertThatThrownBy(() -> flyway("3", down).migrate()).isInstanceOf(RuntimeException.class);
@@ -108,6 +117,13 @@ class DocumentWorkspaceMigrationTests {
                 .javaMigrations(new V3__BackfillDocumentWorkspaces(client))
                 .target(target)
                 .load();
+    }
+
+    private abstract static class StubWorkspaceClient implements WorkspaceClient {
+        @Override
+        public Optional<WorkspaceRole> roleOf(String userId, Long workspaceId) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private void seed(String authorId, String title) {
