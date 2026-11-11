@@ -90,6 +90,26 @@ class DocumentApiTests {
     }
 
     @Test
+    void updatesKeepTheStoredMarkdownBecauseTheCollaborationServiceOwnsLiveContent() throws Exception {
+        String location = create(owner, BODY).andReturn().getResponse().getHeader("Location");
+
+        mvc.perform(put(location).header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Renamed\",\"markdown\":\"Overwrite attempt\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Renamed"))
+                .andExpect(jsonPath("$.markdown").value("# Text"));
+        mvc.perform(put(location).header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Metadata only\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.markdown").value("# Text"));
+    }
+
+    @Test
+    void creatingWithoutInitialMarkdownIsRejected() throws Exception {
+        mvc.perform(post(COLLECTION).header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Notes\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void documentsCannotBeMovedToAnotherWorkspace() throws Exception {
         String location = create(owner, BODY).andReturn().getResponse().getHeader("Location");
 

@@ -31,9 +31,9 @@ public class DocumentMapper {
                 .build();
     }
 
+    /** Markdown is deliberately not copied: the collaboration service owns the content after seeding. */
     public void updateEntity(Document document, DocumentDTO dto) {
         document.setTitle(dto.getTitle().trim());
-        document.setMarkdown(dto.getMarkdown());
         if (dto.getVisibility() != null) {
             document.setVisibility(dto.getVisibility());
         }

@@ -2,7 +2,6 @@ package com.example.document.dto;
 
 import com.example.document.entity.DocumentVisibility;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -31,7 +30,11 @@ public class DocumentDTO {
 
     private DocumentVisibility visibility;
 
-    @NotNull(message = "Markdown content is required")
+    /**
+     * Required on create, where it is the initial content. Live edits are held by the collaboration
+     * service; after the document is first opened this stored text is no longer updated, and an
+     * update request may omit it.
+     */
     @Size(max = 1000000, message = "Markdown is too long")
     private String markdown;
 
