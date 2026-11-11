@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from 'bun';
 import { cookieToken, type Access, type User } from './auth';
 import { Presence } from './presence';
-import { parseMessage, type ServerMessage } from './protocol';
+import { parseMessage, type ServerMessage } from './legacy-protocol';
 
 type Connection = {
   user: User;

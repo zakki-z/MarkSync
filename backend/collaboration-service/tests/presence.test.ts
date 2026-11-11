@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { startServer } from '../src/server';
 import { upstreamAccess, type Access } from '../src/auth';
-import { parseMessage, type ServerMessage } from '../src/protocol';
+import { parseMessage, type ServerMessage } from '../src/legacy-protocol';
 
 const origin = 'http://localhost:8080';
 const apps: ReturnType<typeof startServer>[] = [];

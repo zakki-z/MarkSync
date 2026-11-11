@@ -1,5 +1,5 @@
 import type { User } from './auth';
-import type { OnlineUser, ServerMessage } from './protocol';
+import type { OnlineUser, ServerMessage } from './legacy-protocol';
 
 export type Peer = { data: { user: User; room: number | null }; send(message: string): unknown };
 
