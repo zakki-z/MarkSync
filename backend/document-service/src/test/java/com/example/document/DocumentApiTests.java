@@ -145,6 +145,49 @@ class DocumentApiTests {
     }
 
     @Test
+    void anyoneCanReadAPublicDocumentButNeverEditIt() throws Exception {
+        String location = create(owner, "{\"title\":\"Open\",\"markdown\":\"# Hi\",\"visibility\":\"PUBLIC\"}")
+                .andReturn().getResponse().getHeader("Location");
+
+        mvc.perform(get(location)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Open")).andExpect(jsonPath("$.canEdit").value(false));
+        mvc.perform(get(location).header("Authorization", stranger)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.canEdit").value(false));
+        mvc.perform(get(location).header("Authorization", viewer)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.canEdit").value(false));
+    }
+
+    @Test
+    void publicDocumentRejectsEveryWriteFromAnonymousAndNonEditors() throws Exception {
+        String location = create(owner, "{\"title\":\"Open\",\"markdown\":\"# Hi\",\"visibility\":\"PUBLIC\"}")
+                .andReturn().getResponse().getHeader("Location");
+        String edit = "{\"title\":\"Hacked\",\"markdown\":\"x\",\"visibility\":\"PRIVATE\"}";
+
+        mvc.perform(put(location).contentType(MediaType.APPLICATION_JSON).content(edit))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(delete(location)).andExpect(status().isUnauthorized());
+        for (String user : new String[] {stranger, viewer}) {
+            mvc.perform(put(location).header("Authorization", user).contentType(MediaType.APPLICATION_JSON)
+                    .content(edit)).andExpect(status().isForbidden());
+            mvc.perform(delete(location).header("Authorization", user)).andExpect(status().isForbidden());
+        }
+        mvc.perform(post("/api/workspaces/5/documents").contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get(COLLECTION)).andExpect(status().isUnauthorized());
+        mvc.perform(get(location)).andExpect(jsonPath("$.title").value("Open"))
+                .andExpect(jsonPath("$.visibility").value("PUBLIC"));
+    }
+
+    @Test
+    void invalidTokenIsRejectedEvenOnThePublicReadPath() throws Exception {
+        String location = create(owner, "{\"title\":\"Open\",\"markdown\":\"\",\"visibility\":\"PUBLIC\"}")
+                .andReturn().getResponse().getHeader("Location");
+
+        mvc.perform(get(location).header("Authorization", token("7", Instant.now().minusSeconds(60), secret)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void rejectsForgedExpiredOrMissingIdentityAndExpiryTokens() throws Exception {
         for (String invalid : new String[] {
                 token("7", Instant.now().plusSeconds(600), "a-different-test-only-secret-key-12345"),

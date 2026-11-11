@@ -41,7 +41,8 @@ public class DocumentController {
 
     @GetMapping("/documents/{id}")
     public ResponseEntity<DocumentDTO> getById(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(service.getById(id, jwt.getSubject()));
+        // The read endpoint is public, so the caller may be anonymous (no JWT).
+        return ResponseEntity.ok(service.getById(id, jwt == null ? null : jwt.getSubject()));
     }
 
     @PutMapping("/documents/{id}")
