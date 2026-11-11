@@ -3,7 +3,7 @@ package com.example.document.policy;
 import com.example.document.entity.Document;
 import com.example.document.entity.DocumentVisibility;
 import com.example.document.workspace.WorkspaceClient;
-import com.example.document.workspace.WorkspaceRole;
+import com.example.document.workspace.WorkspaceAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -16,9 +16,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WorkspaceDocumentAccessPolicyTest {
     private static final Long WORKSPACE = 5L;
 
-    /** Users: 1 owner, 2 editor, 3 viewer, 4 not a member. */
-    private final Map<String, WorkspaceRole> roles = Map.of(
-            "1", WorkspaceRole.OWNER, "2", WorkspaceRole.EDITOR, "3", WorkspaceRole.VIEWER);
+    /** Users: 1 owner and 2 editor (may edit), 3 viewer (read only), 4 not a member. */
+    private final Map<String, WorkspaceAccess> access = Map.of(
+            "1", new WorkspaceAccess(true), "2", new WorkspaceAccess(true), "3", new WorkspaceAccess(false));
 
     private final WorkspaceClient workspaces = new WorkspaceClient() {
         @Override
@@ -27,8 +27,8 @@ class WorkspaceDocumentAccessPolicyTest {
         }
 
         @Override
-        public Optional<WorkspaceRole> roleOf(String userId, Long workspaceId) {
-            return WORKSPACE.equals(workspaceId) ? Optional.ofNullable(roles.get(userId)) : Optional.empty();
+        public Optional<WorkspaceAccess> accessOf(String userId, Long workspaceId) {
+            return WORKSPACE.equals(workspaceId) ? Optional.ofNullable(access.get(userId)) : Optional.empty();
         }
     };
 

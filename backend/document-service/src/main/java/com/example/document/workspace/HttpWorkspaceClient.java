@@ -45,12 +45,12 @@ public class HttpWorkspaceClient implements WorkspaceClient {
     }
 
     @Override
-    public Optional<WorkspaceRole> roleOf(String userId, Long workspaceId) {
+    public Optional<WorkspaceAccess> accessOf(String userId, Long workspaceId) {
         try {
             Membership membership = http.get().uri("/api/workspaces/{id}/membership", workspaceId)
                     .header("Authorization", "Bearer " + tokens.issueFor(userId))
                     .retrieve().body(Membership.class);
-            return Optional.of(membership.role());
+            return Optional.of(new WorkspaceAccess(membership.canEdit()));
         } catch (HttpClientErrorException.NotFound e) {
             return Optional.empty();
         } catch (RestClientException e) {
@@ -58,7 +58,7 @@ public class HttpWorkspaceClient implements WorkspaceClient {
         }
     }
 
-    private record Membership(WorkspaceRole role) {
+    private record Membership(boolean canEdit) {
     }
 
     private record WorkspaceSummary(Long id, String name, String ownerId) {

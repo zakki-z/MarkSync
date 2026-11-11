@@ -7,6 +7,6 @@ public interface WorkspaceClient {
     /** Returns the id of the owner's personal workspace, creating it when it does not exist yet. */
     Long findOrCreatePersonalWorkspace(String ownerId);
 
-    /** Returns the user's role in the workspace, or empty when the user is not a member. */
-    Optional<WorkspaceRole> roleOf(String userId, Long workspaceId);
+    /** Returns what the user may do in the workspace, or empty when the user is not a member. */
+    Optional<WorkspaceAccess> accessOf(String userId, Long workspaceId);
 }
