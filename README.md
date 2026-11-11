@@ -1,6 +1,6 @@
 # MarkSync
 
-MarkSync is a university software engineering project for private Markdown documents and authenticated real-time presence. Task 1 delivers registration, login, document CRUD, a safe Markdown preview, and native WebSocket room presence. Concurrent text editing, sharing, RBAC, CRDT/Yjs, AI features, Kafka, MongoDB, and cloud deployment are outside this walking skeleton.
+MarkSync is a university software engineering project for private Markdown documents and authenticated real-time presence. Task 1 delivers registration, login, document CRUD, a safe Markdown preview, and native WebSocket presence per workspace. Concurrent text editing, sharing, RBAC, CRDT/Yjs, AI features, Kafka, MongoDB, and cloud deployment are outside this walking skeleton.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ MarkSync is a university software engineering project for private Markdown docum
 | Authentication | Python 3.12, FastAPI, SQLAlchemy, Argon2, JWT | Persistent accounts with usernames, authenticated user lookup, and signed, one-hour HS256 access tokens |
 | Documents | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Workspace-scoped CRUD, visibility, role-based access and saved Markdown |
 | Workspaces | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Workspaces, memberships with Owner/Editor/Viewer roles, and invitations (send, accept, decline, revoke) |
-| Collaboration | Bun 1.3.14, TypeScript, native WebSockets | Authenticated document rooms, deduplicated presence, heartbeat |
+| Collaboration | Bun 1.3.14, TypeScript, native WebSockets | Authenticated workspace rooms, who is online, messages, heartbeat, revalidation of access |
 | Storage | PostgreSQL 17 | Separate `marksync_auth`, `marksync_documents` and `marksync_workspaces` databases in a persistent volume |
 | Gateway | Nginx, Docker Compose | One browser origin for pages, APIs, and `/ws` upgrades |
 
@@ -44,8 +44,9 @@ Open **http://127.0.0.1:8080** after the services finish starting. The initial b
 | `COOKIE_SECURE` | Default `false` for local HTTP; set `true` when serving HTTPS |
 | `AUTH_SERVICE_URL` | Internal FastAPI URL used by the frontend and the Workspace Service (user lookup), set by Compose to `http://auth:8000` |
 | `INVITATION_TTL` | Optional, Workspace Service: how long an invitation can be accepted, default `7d` |
-| `WORKSPACE_SERVICE_URL` | Internal Workspace Service URL used by the Document Service and the frontend, set by Compose to `http://workspace:8083` |
-| `DOCUMENT_SERVICE_URL` | Internal Spring URL, set by Compose to `http://document:8082` |
+| `WORKSPACE_SERVICE_URL` | Internal Workspace Service URL used by the Document Service, the Collaboration service and the frontend, set by Compose to `http://workspace:8083` |
+| `DOCUMENT_SERVICE_URL` | Internal Spring URL, set by Compose to `http://document:8082` (used by the frontend) |
+| `REVALIDATE_INTERVAL_MS` | Optional, Collaboration service: how often joined workspaces are checked against the Workspace Service, default `10000` in Compose and `30000` without it |
 | `WORKSPACE_SERVICE_URL` | Internal Spring URL, set by Compose to `http://workspace:8083` |
 | `DATABASE_URL` | Auth SQLAlchemy URL, set by Compose |
 | `SPRING_DATASOURCE_*` | Document and Workspace database URL/user/password, set by Compose |
@@ -103,6 +104,23 @@ The Workspace Service stores only user ids (and the email the inviter typed, for
 
 To try it with two accounts: sign up as `olivia` and `dana` (Sign up has an optional username), as Olivia open a workspace, go to **Members** and invite `dana` as Editor, then as Dana open **Invitations** and accept. Dana now edits Olivia's documents; invite a third account as Viewer to see them read-only.
 
+### Workspace presence and messages
+
+Members of a workspace see who else is online and can send short messages to them, over one authenticated WebSocket per browser tab (`/ws`, Nginx to Bun). The dashboard (`/w/{id}`) and the document view show an **Online Users** list (names, a "you" marker and the count), a connection indicator (**Connected**, **Reconnecting**, **Disconnected**, **Access revoked**) and a small message box. The UI only shows what the server reports; membership is decided by the Workspace Service.
+
+| Rule | Behaviour |
+| --- | --- |
+| Handshake | Allowed Origin and the `marksync_session` cookie, verified with the Auth service, before the upgrade. Otherwise `401`/`403`, or `503` if Auth is down. |
+| Join | Any role (owner, editor, viewer) may join. Every join asks `GET /api/workspaces/{id}/membership`; non-members get an error and are not added. An unavailable Workspace Service refuses the join. |
+| Messages | Delivered only to the room's members, and only if the sender has joined that room. |
+| Tabs | A user with several tabs is online until the last one leaves. |
+| Privacy | Other members see only user id and display name (the username), never emails or tokens. |
+| Heartbeat | The client sends one every 15 s; the server drops a connection silent for more than 3 intervals and updates presence. |
+| Revoked access | Every `REVALIDATE_INTERVAL_MS` the server re-checks each joined workspace. A removed member is taken out of the room, told, and disconnected with `4403`; the others see them leave. |
+| Reconnect | The frontend reconnects with exponential backoff and jitter (1 s up to 30 s) and joins again, except after `4401` (sign in again) or `4403` (no access). |
+
+Close codes: `4401` unauthenticated, `4403` forbidden or access revoked, `4408` heartbeat timeout, `1012` server restarting, `1013` try again later (Workspace Service unavailable). The message protocol and design are in [ADR-005](docs/adr/ADR-005-workspace-presence.md) and the Collaboration service README. State is in memory in one instance; see the ADR for the limits.
+
 ### Persistence and migrations
 
 `postgres_data` holds both databases. `docker compose down` preserves it; `docker compose down -v` deletes it. Auth creates missing user tables without deleting existing rows; on startup it also adds and backfills the `users.username` column (from the email's local part) if an older database lacks it. Document schema is managed by `V1__create_documents.sql`; Hibernate only validates it. Flyway baselines an existing Hibernate-managed schema at version 0, then applies the non-destructive migration and owner index. Existing incompatible schemas fail validation rather than being silently rewritten.
@@ -118,16 +136,17 @@ docker compose up -d workspace
 
 User ids are stored as plain strings with no foreign keys, because users live in the separate Auth database. "One pending invitation per workspace and user" is enforced by the database: `pending_marker` is `TRUE` only while an invitation is `PENDING` and `NULL` afterwards, and a unique constraint over (workspace, user, marker) allows any number of closed invitations but one open one (a partial index would not run on the H2 test database).
 
-## Demonstrating Task 1
+## Demonstrating Task 1 and workspace presence
 
-1. Open `/auth`, select **Sign up**, register an email with an 8–128 character password, then log in. You arrive at `/documents`.
-2. Enter a title and Markdown, create the document, edit and save it. Reload to confirm it reopens, then choose **Preview**.
-3. Open a separate browser profile/private window and log in as the **same owner**. Open the saved document. Both windows show **1 online user / 2 active sessions**.
-4. Close the second window, switch it to a new document, or sign out. The first window returns to **1 active session**.
-5. Sign in with a different account: the private document is absent, and direct API or room access is denied.
-6. Sign out and revisit `/documents`: you return to `/auth`; protected API requests return 401.
-
-Owner-only documents and deduplication mean two different users cannot join the same private document. Task 1 therefore demonstrates two authenticated sessions of the owner with a session count. The generic presence tests also exercise two distinct identities with an injected authorization policy; production uses the Document Service's owner-only policy. Sharing must be specified separately before a two-account demo is possible.
+1. Open `/auth`, select **Sign up**, register an email with an 8–128 character password, then log in. You arrive at your personal workspace.
+2. Create a document, edit and save it. Reload to confirm it reopens, then choose **Preview**.
+3. Open a separate browser profile or private window and log in as the **same user**. Both windows list that user once under **Online Users**; closing one window leaves the user online.
+4. In the separate window, sign out and sign up a second account. As the owner, open **Invitations** in the workspace, invite the second account by email or username, and accept it as that account under **My invitations**.
+5. Open the workspace in both browsers. Each lists both users, with the "you" marker on their own name. Send a message in each browser: it appears in both.
+6. Network failure: stop the second browser's network (for example DevTools **Offline**). Its status shows **Reconnecting**, and the first browser stops listing it (at once if the socket closes, otherwise after the 45 s heartbeat timeout). Restore the network: it reconnects and joins again by itself.
+7. Revoked access: as the owner open **Members** and remove the second account while it is connected. Within `REVALIDATE_INTERVAL_MS` its status changes to **Access revoked** and it stops receiving messages; the first browser stops listing it.
+8. Sign in with an account that is not a member: private documents are absent and joining the workspace over `/ws` is refused.
+9. Sign out and revisit `/documents`: you return to `/auth`; protected API requests return 401.
 
 The preview supports headings, paragraphs, emphasis, lists, quotes, links, and fenced code. Raw HTML is escaped and unsafe link schemes are not rendered. It is a small Markdown subset, not a complete CommonMark implementation. Presence does not synchronize edits; saving from two sessions uses the existing last-save-wins behavior.
 
@@ -171,7 +190,7 @@ cd backend/workspace-service
 ./mvnw -B verify
 ```
 
-Collaboration (real local Bun WebSocket connections, isolated auth/authorization fixtures):
+Collaboration (real local Bun WebSocket connections against stubbed Auth and Workspace services):
 
 ```sh
 cd backend/collaboration-service
@@ -189,7 +208,7 @@ cd frontend
 bun x playwright test --config playwright.integration.config.ts
 ```
 
-The persistence check creates an isolated account/document, restarts PostgreSQL, Auth, and Documents, logs in again, and checks the saved content. It briefly interrupts this local stack and leaves its test record for inspection. Set `E2E_BASE_URL` for an alternate gateway URL. Playwright checks actual signup/login, private CRUD, safe preview, two browser contexts, WebSocket denial for another account, disconnects, CSRF protection, invalid cookies, mobile authentication, and logout.
+The persistence check creates an isolated account/document, restarts PostgreSQL, Auth, and Documents, logs in again, and checks the saved content. It briefly interrupts this local stack and leaves its test record for inspection. Set `E2E_BASE_URL` for an alternate gateway URL. Playwright checks actual signup/login, private CRUD, safe preview, two browser contexts, WebSocket denial for another account, two accounts seeing each other online and exchanging messages, a removed member being cut off, CSRF protection, invalid cookies, mobile authentication, and logout. The reconnect logic is unit-tested in `frontend/tests/presence-client.spec.ts`.
 
 ## CI and review
 
