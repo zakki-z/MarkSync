@@ -78,7 +78,7 @@ services:
     build:
       context: ./backend/collaboration-service
       dockerfile: ../../infra/nodejs/Dockerfile
-    command: ["sh", "-c", "bun install --frozen-lockfile && bun --watch index.ts"]
+    command: ["sh", "-c", "bun install && bun --watch index.ts"]
     environment:
       PORT: "3001"
       AUTH_SERVICE_URL: http://auth:8000
@@ -98,7 +98,7 @@ services:
     build:
       context: ./frontend
       dockerfile: ../infra/nodejs/Dockerfile
-    command: ["sh", "-c", "bun install --frozen-lockfile && bun run dev --hostname 0.0.0.0"]
+    command: ["sh", "-c", "bun install && bun run dev --hostname 0.0.0.0"]
     environment:
       APP_ORIGINS: ${APP_ORIGINS:-http://127.0.0.1:8080,http://localhost:8080}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
