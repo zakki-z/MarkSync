@@ -115,11 +115,11 @@ describe('revalidation of joined rooms', () => {
     let release!: () => void;
     access.gate = new Promise<void>((resolve) => (release = resolve));
     const sweeping = app.revalidator.sweep();
-    app.connections.close(ada.connection, CloseCode.GoingAway, 'bye');
+    app.connections.close(ada.connection, CloseCode.ServiceRestart, 'bye');
     release();
     await sweeping;
     expect(ada.transport.of('error')).toHaveLength(0);
-    expect(ada.transport.closed?.code).toBe(CloseCode.GoingAway);
+    expect(ada.transport.closed?.code).toBe(CloseCode.ServiceRestart);
   });
 
   test('overlapping sweeps are skipped instead of piling up', async () => {

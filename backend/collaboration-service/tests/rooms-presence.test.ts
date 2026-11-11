@@ -208,7 +208,7 @@ describe('dispatching', () => {
     let release!: () => void;
     access.gate = new Promise<void>((resolve) => (release = resolve));
     const joining = app.dispatcher.dispatch(ada.connection, join(7));
-    app.connections.close(ada.connection, CloseCode.GoingAway, 'bye');
+    app.connections.close(ada.connection, CloseCode.ServiceRestart, 'bye');
     release();
     await joining;
     expect(ada.connection.rooms.size).toBe(0);

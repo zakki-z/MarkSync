@@ -1,6 +1,7 @@
 import { AccessEnforcer } from './access-enforcer';
 import { AccessRevalidator } from './access-revalidator';
 import { ConnectionRegistry } from './connection-registry';
+import { ChatHandler } from './handlers/chat-handler';
 import { HeartbeatHandler } from './handlers/heartbeat-handler';
 import { JoinHandler } from './handlers/join-handler';
 import { LeaveHandler } from './handlers/leave-handler';
@@ -31,7 +32,12 @@ export function createApp({
   const connections = new ConnectionRegistry(rooms);
   const enforcer = new AccessEnforcer(rooms, connections);
   const dispatcher = new MessageDispatcher(
-    [new JoinHandler(access, rooms, enforcer), new LeaveHandler(rooms), new HeartbeatHandler()],
+    [
+      new JoinHandler(access, rooms, enforcer),
+      new LeaveHandler(rooms),
+      new HeartbeatHandler(),
+      new ChatHandler(rooms, clock),
+    ],
     clock,
   );
   const monitor = new HeartbeatMonitor(connections, heartbeat, clock);
@@ -52,7 +58,7 @@ export function createApp({
     stop() {
       monitor.stop();
       revalidator.stop();
-      connections.closeAll(CloseCode.GoingAway, 'Server shutting down.');
+      connections.closeAll(CloseCode.ServiceRestart, 'Server shutting down.');
     },
   };
 }

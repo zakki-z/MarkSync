@@ -5,7 +5,8 @@
 
 /** Close codes. 4xxx codes are application codes; the client must not reconnect after 4401/4403. */
 export const CloseCode = {
-  GoingAway: 1001,
+  /** Shutdown. Not 1001: Bun delivers a server-sent 1001 to clients as 1000. */
+  ServiceRestart: 1012,
   TryAgainLater: 1013,
   Unauthenticated: 4401,
   Forbidden: 4403,

@@ -119,7 +119,7 @@ describe('lifecycle with fake timers', () => {
 });
 
 describe('graceful shutdown', () => {
-  test('closes every connection with 1001, clears the rooms and stops the timer', async () => {
+  test('closes every connection with 1012, clears the rooms and stops the timer', async () => {
     jest.useFakeTimers();
     const { app } = setup();
     const ada = connect(app, 1);
@@ -129,7 +129,7 @@ describe('graceful shutdown', () => {
     app.start();
     app.stop();
     for (const { transport, connection } of [ada, bob]) {
-      expect(transport.closed?.code).toBe(CloseCode.GoingAway);
+      expect(transport.closed?.code).toBe(CloseCode.ServiceRestart);
       expect(connection.rooms.size).toBe(0);
     }
     expect(app.connections.all()).toEqual([]);
