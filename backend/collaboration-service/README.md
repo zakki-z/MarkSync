@@ -1,8 +1,8 @@
 # Collaboration Service
 
-Bun 1.3.14 and TypeScript native WebSocket service for workspace presence and messages. Start with `bun install --frozen-lockfile && bun start`, or use the root Compose stack. The design and its limits are in [ADR-005](../../docs/adr/ADR-005-workspace-presence.md).
+Bun 1.3.14 and TypeScript native WebSocket service for workspace presence and messages and for collaborative document editing with Yjs. Start with `bun install --frozen-lockfile && bun start` (it needs MongoDB), or use the root Compose stack. The designs and their limits are in [ADR-005](../../docs/adr/ADR-005-workspace-presence.md) (presence) and [ADR-006](../../docs/adr/ADR-006-collaborative-synchronization.md) (synchronization).
 
-The service owns no workspace data. It asks the Auth service who a session cookie belongs to and the Workspace service whether that user may be in a workspace.
+The service owns no workspace or access data. It asks the Auth service who a session cookie belongs to, the Workspace service whether that user may be in a workspace and the Document service whether they may read or edit a document. It owns the Yjs state of documents.
 
 ## Configuration
 
@@ -12,12 +12,17 @@ The service owns no workspace data. It asks the Auth service who a session cooki
 | `APP_ORIGINS`            | `http://127.0.0.1:8080,http://localhost:8080` | Exact browser origins allowed to open a socket                      |
 | `AUTH_SERVICE_URL`       | `http://localhost:8000`                       | Verifies the session token (`GET /auth/me`)                         |
 | `WORKSPACE_SERVICE_URL`  | `http://localhost:8083`                       | Membership check (`GET /api/workspaces/{id}/membership`)            |
-| `UPSTREAM_TIMEOUT_MS`    | `5000`                                        | Timeout of both upstream calls; a timeout counts as unavailable     |
+| `DOCUMENT_SERVICE_URL`   | `http://localhost:8082`                       | Document access and edit permission (`GET /api/documents/{id}`)     |
+| `MONGODB_URL`            | `mongodb://localhost:27017`                   | Where Yjs updates and snapshots are stored                          |
+| `MONGODB_DATABASE`       | `marksync_collaboration`                      | Database name                                                       |
+| `UPSTREAM_TIMEOUT_MS`    | `5000`                                        | Timeout of the upstream calls; a timeout counts as unavailable      |
 | `HEARTBEAT_INTERVAL_MS`  | `15000`                                       | Expected client heartbeat interval; the monitor sweeps at this rate |
 | `HEARTBEAT_MAX_MISSED`   | `3`                                           | Silent intervals before a connection is dropped                     |
 | `REVALIDATE_INTERVAL_MS` | `30000`                                       | How often joined rooms are checked against the Workspace service    |
 
-`GET /health` is public. `/ws` requires an allowed Origin and the `marksync_session` HttpOnly cookie, validated before the upgrade. Tokens are never read from URLs and are never logged or broadcast.
+`GET /health` is public. `GET /documents/{id}/markdown` returns a document's current text to a caller with read access: the `Authorization: Bearer` token is optional (anonymous callers can read public documents) and checked by the Document service; no cookie is read. `401`, `403` and `503` mirror the access answer. Only the Next.js server calls it.
+
+`/ws` requires an allowed Origin and the `marksync_session` HttpOnly cookie, validated before the upgrade. Tokens are never read from URLs and are never logged or broadcast.
 
 ## Protocol
 
@@ -37,14 +42,21 @@ Server to client:
 - `{ "type": "heartbeat" }`: the answer to a heartbeat.
 - `{ "type": "error", "code": "...", "message": "...", "workspaceId": 7 }`: `INVALID_MESSAGE` and `NOT_JOINED` keep the connection open; `FORBIDDEN`, `UNAUTHENTICATED` and `UNAVAILABLE` remove the connection from the room and are followed by a close when it has no room left.
 
+Document messages (see ADR-006):
+
+- `{ "type": "document-join", "documentId": 4 }` and `{ "type": "document-leave", "documentId": 4 }`. A join asks the Document service. The answer to a join, and to any later change of the user's permission, is `{ "type": "document-access", "documentId": 4, "canEdit": true }`. Errors for a document carry its `documentId`.
+- **Binary frames** carry Yjs: `[varuint documentId][varuint kind][y-protocols message]`, kind `0` sync and `1` awareness, at most 4 MiB. Updates from a connection without edit permission are dropped. Awareness is rebuilt by the server as `{user: {id, name, color}, cursor}`.
+
 Close codes: `4401` sign in again, `4403` no access or access revoked, `4408` heartbeat timeout, `1012` server shutting down, `1013` try again later. Clients must not reconnect after 4401 or 4403.
 
 ## Structure
 
 `src/app.ts` is the only place objects are wired together. `server.ts` is the HTTP/WebSocket edge; the dispatcher validates each frame and runs one handler per message type (`src/handlers/`), so adding a type adds a handler and nothing else. `RoomManager`, `PresenceRegistry` (interface, in-memory implementation), `HeartbeatMonitor`, `AccessRevalidator` and `AccessEnforcer` each do one job.
 
+Documents: `DocumentSessionManager` keeps one `DocumentSession` per open document (loaded on the first join, evicted after the last leave once its edits are stored), which owns the `Y.Doc`, the members, `DocumentAwareness` and the debounced, retried writes. `DocumentPersistence` is the storage interface (`MongoDocumentPersistence`: collections `yjs_updates`, append-only, and `yjs_snapshots`, one per document; compaction after 100 updates), and `loadDocument` seeds a never-stored document from the Document service's Markdown. Index and schema details are in the ADR.
+
 Bun 1.3.14 delivers a server-sent close code of 1001 to clients as 1000, so shutdown uses 1012.
 
 ## Verification
 
-`bun run typecheck`, `bun run format:check`, and `bun test`. Unit tests use fake connections, injected clocks and fake timers. `tests/integration.test.ts` opens real sockets for two different accounts against stubbed Auth and Workspace services and uses the real HTTP clients: both see each other online, messages flow both ways, a non-member is rejected, and a removed member is evicted. End-to-end tests with the real services run from `frontend` (see the root README).
+`bun run typecheck`, `bun run format:check`, and `bun test`. Unit tests use fake connections, injected clocks, fake timers and an in-memory `DocumentPersistence`. `tests/convergence.test.ts` runs several real clients against a real server: concurrent edits converge, offline edits merge on reconnect, content survives a restart on the same store and unsaved edits are restored by the clients. Set `MONGODB_URL` to run the storage contract and that suite against MongoDB as well. `tests/integration.test.ts` opens real sockets for two different accounts against stubbed Auth and Workspace services and uses the real HTTP clients: both see each other online, messages flow both ways, a non-member is rejected, and a removed member is evicted. End-to-end tests with the real services run from `frontend` (see the root README).

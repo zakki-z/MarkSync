@@ -82,6 +82,8 @@ Alternative approaches considered:
 
 **Document storage principle.** The Document service keeps title, author, workspace and Markdown content in PostgreSQL and is the single source of truth for the saved document. Live-editing state is kept in MongoDB and is reflected back to the Document service as defined in ADR-001.
 
+**Update (2026-11-11, MS-05):** MongoDB now holds the Yjs updates and snapshots (see [ADR-006](ADR-006-collaborative-synchronization.md)) and is started by Compose. The PostgreSQL `markdown` column is the initial content of a document only; once a document has been opened, the live content is the Yjs state owned by the Collaboration service, and the Document service does not update the column.
+
 ### 5. Supporting architectural decisions
 
 | Decision | Rationale | Cost we accept |
