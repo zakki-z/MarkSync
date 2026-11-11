@@ -15,9 +15,10 @@ export type DocumentDTO = {
   updatedAt: string;
 };
 
+/** `markdown` is the initial content of a new document; later edits go through collaboration. */
 export type DocumentDraft = {
   title: string;
-  markdown: string;
+  markdown?: string;
   visibility?: DocumentVisibility;
 };
 

@@ -1,5 +1,8 @@
 import { expect, test } from 'bun:test';
+import * as encoding from 'lib0/encoding';
+import * as frontendFrames from '../../../frontend/src/collab/frames';
 import * as frontend from '../../../frontend/src/presence/protocol';
+import * as serverFrames from '../src/document-frames';
 import * as server from '../src/protocol';
 
 // The two services are built separately, so the frontend keeps a copy of the protocol.
@@ -42,4 +45,20 @@ test('the server parser accepts every message the frontend can send', () => {
   ];
   for (const message of messages)
     expect(server.parseClientMessage(JSON.stringify(message))).toEqual(message);
+});
+
+test('the frontend frame codec reads what the server writes and the other way round', () => {
+  expect(frontendFrames.FrameKind).toEqual(serverFrames.FrameKind);
+  for (const kind of Object.values(serverFrames.FrameKind)) {
+    const payload = new Uint8Array([7, 8, 9]);
+    const fromServer = serverFrames.encodeFrame(300, kind, (e) =>
+      encoding.writeUint8Array(e, payload),
+    );
+    const fromFrontend = frontendFrames.encodeFrame(300, kind, (e) =>
+      encoding.writeUint8Array(e, payload),
+    );
+    expect(fromFrontend).toEqual(fromServer);
+    expect(frontendFrames.decodeFrame(fromServer)).toEqual({ documentId: 300, kind, payload });
+    expect(serverFrames.decodeFrame(fromFrontend)).toEqual({ documentId: 300, kind, payload });
+  }
 });

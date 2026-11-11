@@ -10,9 +10,11 @@ import {
   type DocumentDraft,
   type DocumentVisibility,
 } from '@/src/documentService';
+import { CollaborativeEditor } from '@/src/components/CollaborativeEditor';
+import { ConnectionStatus } from '@/src/components/ConnectionStatus';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
+import { useCollaborativeDocument } from '@/src/hooks/useCollaborativeDocument';
 import { useMembership } from '@/src/hooks/useMembership';
-import { prettyDate } from '@/src/format';
 import { MarkdownPreview } from '@/src/MarkdownPreview';
 
 type Props = {
@@ -46,11 +48,13 @@ function MemberPresence({
 
 const toDraft = (doc: DocumentDTO): DocumentDraft => ({
   title: doc.title,
-  markdown: doc.markdown,
   visibility: doc.visibility,
 });
 
-/** Edits a document, or shows it read-only when the API says the caller cannot edit it. */
+/**
+ * Edits a document, or shows it read-only when the API says the caller cannot edit it. Title and
+ * visibility are saved through the REST API; the Markdown is edited live through collaboration.
+ */
 export function DocumentEditor({ document: initial, user, onDeleted, onSessionExpired }: Props) {
   const mutationPending = useRef(false);
   const [saved, setSaved] = useState(initial);
@@ -60,12 +64,17 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
   const [notice, setNotice] = useState('');
   const [activeView, setActiveView] = useState<'edit' | 'preview'>('edit');
 
+  const live = useCollaborativeDocument(saved.id, !!user, onSessionExpired);
+  const snapshot = live?.snapshot;
+
   const readOnly = !saved.canEdit;
   const original = toDraft(saved);
-  const dirty =
-    draft.title !== original.title ||
-    draft.markdown !== original.markdown ||
-    draft.visibility !== original.visibility;
+  const dirty = draft.title !== original.title || draft.visibility !== original.visibility;
+  // Until the server's state has arrived, the REST copy (kept current by the server) is shown.
+  const markdown = snapshot?.hasSynced ? snapshot.markdown : saved.markdown;
+  // The server has the last word on editing: it can withdraw it while the page is open.
+  const editable = !readOnly && snapshot?.hasSynced === true && snapshot.canEdit === true;
+  const permissionLost = !readOnly && snapshot?.hasSynced === true && snapshot.canEdit === false;
 
   useEffect(() => {
     if (!dirty) return;
@@ -101,7 +110,8 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
     }
     return run(async () => {
       const updated = await updateDocument(saved.id, { ...draft, title: draft.title.trim() });
-      setSaved(updated);
+      // The response carries the stored seed copy of the Markdown, which is not the live text.
+      setSaved({ ...updated, markdown: saved.markdown });
       setDraft(toDraft(updated));
       setNotice('Document saved successfully.');
     }, 'Unable to save document.');
@@ -185,6 +195,13 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
             </label>
           )}
         </div>
+        {permissionLost && (
+          <div className="alert error" role="alert">
+            {snapshot?.status === 'revoked'
+              ? 'Your access to this document was revoked.'
+              : 'You no longer have permission to edit this document.'}
+          </div>
+        )}
         {(error || notice) && (
           <div className={`alert ${error ? 'error' : 'success'}`} role={error ? 'alert' : 'status'}>
             {error || notice}
@@ -212,27 +229,28 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
         )}
         <div className="editing-surface">
           {!readOnly && activeView === 'edit' ? (
-            <textarea
-              disabled={busy}
-              maxLength={1_000_000}
-              className="markdown-editor"
-              aria-label="Markdown content"
-              spellCheck={false}
-              placeholder={'# Start writing\n\nUse **bold**, *italic*, lists, and code blocks.'}
-              value={draft.markdown}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, markdown: event.target.value }))
-              }
-            />
+            live ? (
+              <CollaborativeEditor collab={live.collab} editable={editable} />
+            ) : (
+              <div className="markdown-preview" aria-live="polite">
+                Connecting…
+              </div>
+            )
           ) : (
             <div className="markdown-preview">
-              <MarkdownPreview markdown={readOnly ? saved.markdown : draft.markdown} />
+              <MarkdownPreview markdown={markdown} />
             </div>
           )}
         </div>
         <div className="editor-status">
-          <span>Markdown · {draft.markdown.length.toLocaleString()} characters</span>
-          <span>Last saved {prettyDate(saved.updatedAt)}</span>
+          <span>Markdown · {markdown.length.toLocaleString()} characters</span>
+          {snapshot && (
+            <span className="status-group">
+              <ConnectionStatus status={snapshot.status} />
+              {snapshot.hasSynced &&
+                (snapshot.synced ? 'All changes synced' : 'Changes sync when reconnected')}
+            </span>
+          )}
         </div>
       </div>
     </>

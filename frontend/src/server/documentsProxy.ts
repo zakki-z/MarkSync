@@ -1,5 +1,12 @@
 import { forbidden, mutationAllowed, sessionToken, unauthorized } from './session';
-import { authBase, documentBase, fetchUpstream, relay, serviceUnavailable } from './upstream';
+import {
+  authBase,
+  collaborationBase,
+  documentBase,
+  fetchUpstream,
+  relay,
+  serviceUnavailable,
+} from './upstream';
 
 type AuthUser = { id: number; email: string; role: string };
 
@@ -43,10 +50,16 @@ export async function optionalAuthorization(
   return { authorization: auth.authorization };
 }
 
-export type DocumentDraft = { title: string; markdown: string; visibility?: 'PRIVATE' | 'PUBLIC' };
+/** `markdown` is the initial content of a new document; updates carry only title and visibility. */
+export type DocumentDraft = {
+  title: string;
+  markdown?: string;
+  visibility?: 'PRIVATE' | 'PUBLIC';
+};
 
 export async function readDraft(
   request: Request,
+  { markdownRequired }: { markdownRequired: boolean },
 ): Promise<{ draft: DocumentDraft } | { error: Response }> {
   try {
     const body: unknown = await request.json();
@@ -60,7 +73,11 @@ export async function readDraft(
         ),
       };
     }
-    if (typeof raw.markdown !== 'string' || raw.markdown.length > 1_000_000) {
+    const markdownValid =
+      typeof raw.markdown === 'string'
+        ? raw.markdown.length <= 1_000_000
+        : raw.markdown === undefined && !markdownRequired;
+    if (!markdownValid) {
       return {
         error: Response.json(
           { detail: 'Markdown content is required (maximum 1,000,000 characters).' },
@@ -80,7 +97,8 @@ export async function readDraft(
     return {
       draft: {
         title: raw.title.trim(),
-        markdown: raw.markdown,
+        // An update never carries Markdown: live content belongs to the collaboration service.
+        ...(markdownRequired && { markdown: raw.markdown as string }),
         ...(raw.visibility && { visibility: raw.visibility }),
       },
     };
@@ -116,4 +134,29 @@ export async function forwardToDocuments(
 
 export function isPositiveId(id: string): boolean {
   return /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id));
+}
+
+/**
+ * Reads a document and replaces its stored Markdown, which is only the seed copy, with the live
+ * text from the collaboration service. Both services check the caller's token, so a document is
+ * only returned to someone allowed to read it. If the live text cannot be fetched the read fails
+ * rather than showing stale content as current.
+ */
+export async function readDocument(path: string, authorization?: string): Promise<Response> {
+  const headers = authorization ? { Authorization: authorization } : undefined;
+  try {
+    const stored = await fetchUpstream(`${documentBase}${path}`, { headers });
+    if (!stored.ok) return relay(stored);
+    const live = await fetchUpstream(`${collaborationBase}${path.replace('/api', '')}/markdown`, {
+      headers,
+    });
+    if (!live.ok) return serviceUnavailable('Collaboration Service');
+    const document = (await stored.json()) as Record<string, unknown>;
+    return Response.json(
+      { ...document, markdown: await live.text() },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  } catch {
+    return serviceUnavailable('Collaboration Service');
+  }
 }

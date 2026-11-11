@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockCollaboration } from './support/collabServer';
 
 const workspace = { id: 1, name: 'Personal', visibility: 'PRIVATE', ownerId: '7' };
 const document = (overrides: Record<string, unknown> = {}) => ({
@@ -151,12 +152,15 @@ test.describe('signed in', () => {
 
   test('edits, previews and deletes a document the user can edit', async ({ page }) => {
     let saved = document();
+    let body: Record<string, unknown> = {};
+    const collaboration = await mockCollaboration(page, { markdown: '# Original content' });
     await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
     await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [saved] }));
     await page.route('**/api/documents/2', async (route) => {
       const method = route.request().method();
       if (method === 'PUT') {
-        saved = { ...saved, ...route.request().postDataJSON() };
+        body = route.request().postDataJSON();
+        saved = { ...saved, ...body };
         await route.fulfill({ json: saved });
       } else if (method === 'DELETE') {
         await route.fulfill({ status: 204, body: '' });
@@ -166,12 +170,22 @@ test.describe('signed in', () => {
     });
     await page.goto('/w/1/d/2');
     await expect(page.getByLabel('Document title')).toHaveValue('Original');
+    const editor = page.getByLabel('Markdown content');
+    await expect(editor).toHaveText('# Original content');
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('# Hello MarkSync');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('**Saved**');
+    await expect.poll(() => collaboration.text()).toBe('# Hello MarkSync\n\n**Saved**');
+
     await page.getByLabel('Document title').fill('Edited');
     await page.getByLabel('Visibility').selectOption('PUBLIC');
-    await page.getByLabel('Markdown content').fill('# Hello MarkSync\n\n**Saved**');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByText('Document saved successfully.')).toBeVisible();
-    expect(saved).toMatchObject({ title: 'Edited', visibility: 'PUBLIC' });
+    // Saving sends the title and visibility only: the text is not saved through REST.
+    expect(body).toEqual({ title: 'Edited', visibility: 'PUBLIC' });
     await page.getByRole('button', { name: 'Preview' }).click();
     await expect(page.locator('.markdown-content h1')).toHaveText('Hello MarkSync');
     await expect(page.locator('.markdown-content strong')).toHaveText('Saved');
@@ -207,13 +221,15 @@ test.describe('signed in', () => {
   });
 
   test('is read-only when the API says the user cannot edit', async ({ page }) => {
+    await mockCollaboration(page, { markdown: '# Live viewer copy', canEdit: false });
     await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
     await page.route('**/api/documents/2', (route) =>
       route.fulfill({ json: document({ canEdit: false, markdown: '# Viewer copy' }) }),
     );
     await page.goto('/w/1/d/2');
     await expect(page.getByText('Read-only')).toBeVisible();
-    await expect(page.locator('.markdown-content h1')).toHaveText('Viewer copy');
+    // The stored copy first, then the live text once the connection has synced.
+    await expect(page.locator('.markdown-content h1')).toHaveText('Live viewer copy');
     await expect(page.getByLabel('Markdown content')).toHaveCount(0);
     await expect(page.getByLabel('Document title')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);

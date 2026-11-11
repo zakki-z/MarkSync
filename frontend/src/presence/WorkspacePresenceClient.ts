@@ -51,7 +51,13 @@ export const INITIAL_SNAPSHOT: PresenceSnapshot = { status: 'connecting', users:
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_CAP_MS = 30_000;
 /** Heartbeats the server may leave unanswered before the connection is presumed dead. */
-const MAX_UNANSWERED = 3;
+export const MAX_UNANSWERED = 3;
+
+/** Exponential backoff with jitter: 1 s doubling to 30 s, then half to full of that. */
+export function reconnectDelay(attempt: number, random: number): number {
+  const ceiling = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** attempt);
+  return ceiling / 2 + (random * ceiling) / 2;
+}
 const MAX_MESSAGES = 100;
 const SOCKET_OPEN = 1;
 
@@ -209,8 +215,7 @@ export class WorkspacePresenceClient {
   private abandon() {
     this.detach();
     this.update({ status: 'reconnecting', users: [] });
-    const ceiling = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** this.attempts++);
-    const delay = ceiling / 2 + (this.random() * ceiling) / 2;
+    const delay = reconnectDelay(this.attempts++, this.random());
     this.cancelReconnect = this.scheduler.after(delay, () => this.connect());
   }
 
