@@ -17,7 +17,7 @@ async function signup(page: Page, email: string) {
   await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
   await expect(page.getByText('Signup successful! Please log in.')).toBeVisible();
 }
-async function rejectRoom(page: Page, documentId: number) {
+async function rejectRoom(page: Page, workspaceId: number) {
   return page.evaluate(
     (id) =>
       new Promise<string>((resolve, reject) => {
@@ -26,7 +26,7 @@ async function rejectRoom(page: Page, documentId: number) {
           socket.close();
           reject(new Error('No authorization response'));
         }, 5000);
-        socket.onopen = () => socket.send(JSON.stringify({ type: 'join', documentId: id }));
+        socket.onopen = () => socket.send(JSON.stringify({ type: 'join', workspaceId: id }));
         socket.onmessage = (event) => {
           const data = JSON.parse(event.data);
           if (data.type === 'presence') {
@@ -45,7 +45,7 @@ async function rejectRoom(page: Page, documentId: number) {
           reject(new Error('WebSocket upgrade failed'));
         };
       }),
-    documentId,
+    workspaceId,
   );
 }
 
@@ -96,15 +96,14 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
     const secondPage = await second.newPage();
     await login(secondPage, email);
     const presence = page.getByRole('region', { name: 'Online Users' });
-    await expect(presence).toContainText('1 active session');
+    await expect(presence.getByRole('listitem')).toHaveCount(1);
+    await expect(presence).toContainText('you');
     await secondPage.getByRole('link', { name: /Walking skeleton/ }).click();
-    await expect(presence).toContainText('2 active sessions');
-    await expect(secondPage.getByRole('region', { name: 'Online Users' })).toContainText(
-      '2 active sessions',
-    );
+    await expect(secondPage.getByRole('region', { name: 'Online Users' })).toContainText('you');
+    // Two tabs of one user are one person online.
     await expect(presence.getByRole('listitem')).toHaveCount(1);
     await second.close();
-    await expect(presence).toContainText('1 active session');
+    await expect(presence.getByRole('listitem')).toHaveCount(1);
 
     outsider = await browser.newContext({ baseURL });
     const outsiderPage = await outsider.newPage();
@@ -124,8 +123,8 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
     expect(
       (await outsider.request.delete(`/api/documents/${documentId}`, { headers })).status(),
     ).toBe(403);
-    expect(await rejectRoom(outsiderPage, documentId)).toBe('DOCUMENT_UNAVAILABLE');
-    expect(await rejectRoom(page, 999999999)).toBe('DOCUMENT_UNAVAILABLE');
+    expect(await rejectRoom(outsiderPage, Number(workspaceId))).toBe('FORBIDDEN');
+    expect(await rejectRoom(page, 999999999)).toBe('FORBIDDEN');
     expect(
       (
         await page.request.post(`/api/workspaces/${workspaceId}/documents`, {

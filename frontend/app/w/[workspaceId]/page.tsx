@@ -6,6 +6,7 @@ import { ApiError } from '@/src/apiClient';
 import { AppShell } from '@/src/components/AppShell';
 import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { DocumentList } from '@/src/components/DocumentList';
+import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
 import { createDocument } from '@/src/documentService';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
 import { useEndSession } from '@/src/hooks/useEndSession';
@@ -77,6 +78,11 @@ export default function WorkspaceDashboard() {
             {createError}
           </div>
         )}
+        <WorkspacePresencePanel
+          workspaceId={workspaceId}
+          currentUserId={user.id}
+          onSessionExpired={() => void endSession()}
+        />
         <DocumentList workspaceId={workspaceId} userId={user.id} documents={documents} />
       </div>
     </AppShell>
