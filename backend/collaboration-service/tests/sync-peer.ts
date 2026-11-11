@@ -1,5 +1,6 @@
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
+import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 import type { createApp } from '../src/app';
@@ -17,6 +18,7 @@ export class SyncPeer {
   readonly doc = new Y.Doc();
   readonly session: ReturnType<typeof connect>;
   private processed = 0;
+  private awarenessState?: awarenessProtocol.Awareness;
   private inflight: Promise<void>[] = [];
 
   constructor(
@@ -37,6 +39,35 @@ export class SyncPeer {
 
   get transport() {
     return this.session.transport;
+  }
+
+  /** The peer's awareness, created on first use (it owns a timer; `destroy` releases it). */
+  get awareness() {
+    if (!this.awarenessState) {
+      const awareness = new awarenessProtocol.Awareness(this.doc);
+      awareness.setLocalState(null);
+      awareness.on(
+        'update',
+        (
+          { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
+          origin: unknown,
+        ) => {
+          if (origin !== 'local') return;
+          const update = awarenessProtocol.encodeAwarenessUpdate(awareness, [
+            ...added,
+            ...updated,
+            ...removed,
+          ]);
+          this.send(awarenessFrame(this.documentId, update));
+        },
+      );
+      this.awarenessState = awareness;
+    }
+    return this.awarenessState;
+  }
+
+  destroy() {
+    this.doc.destroy();
   }
 
   get text() {
@@ -67,7 +98,12 @@ export class SyncPeer {
 
   private receive(raw: Uint8Array) {
     const frame = decodeFrame(raw);
-    if (!frame || frame.kind !== FrameKind.Sync || frame.documentId !== this.documentId) return;
+    if (!frame || frame.documentId !== this.documentId) return;
+    if (frame.kind === FrameKind.Awareness) {
+      const update = decoding.readVarUint8Array(decoding.createDecoder(frame.payload));
+      awarenessProtocol.applyAwarenessUpdate(this.awareness, update, 'remote');
+      return;
+    }
     const decoder = decoding.createDecoder(frame.payload);
     const reply = encoding.createEncoder();
     syncProtocol.readSyncMessage(decoder, reply, this.doc, this);
@@ -82,5 +118,18 @@ export class SyncPeer {
 
 const syncFrame = (documentId: number, write: (encoder: encoding.Encoder) => void) =>
   encodeFrame(documentId, FrameKind.Sync, write);
+
+export const awarenessFrame = (documentId: number, update: Uint8Array) =>
+  encodeFrame(documentId, FrameKind.Awareness, (e) => encoding.writeVarUint8Array(e, update));
+
+/** An awareness message built by hand, for clients that do not follow the rules. */
+export function rawAwareness(documentId: number, clientId: number, clock: number, state: unknown) {
+  const update = encoding.createEncoder();
+  encoding.writeVarUint(update, 1);
+  encoding.writeVarUint(update, clientId);
+  encoding.writeVarUint(update, clock);
+  encoding.writeVarString(update, JSON.stringify(state));
+  return awarenessFrame(documentId, encoding.toUint8Array(update));
+}
 
 export { syncFrame };

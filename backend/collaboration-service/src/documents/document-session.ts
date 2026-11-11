@@ -4,6 +4,7 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 import type { Connection } from '../connection';
 import { encodeFrame, FrameKind } from '../document-frames';
+import { DocumentAwareness } from './document-awareness';
 import type { DocumentPersistence } from '../persistence/document-persistence';
 
 export type PersistenceOptions = {
@@ -20,6 +21,11 @@ export type PersistenceOptions = {
 export type ErrorReporter = (documentId: number, error: unknown) => void;
 
 const MAX_RETRY_MS = 30_000;
+
+const awarenessFrame = (documentId: number, update: Uint8Array) =>
+  encodeFrame(documentId, FrameKind.Awareness, (encoder) =>
+    encoding.writeVarUint8Array(encoder, update),
+  );
 
 type SessionDependencies = {
   persistence: DocumentPersistence;
@@ -45,6 +51,7 @@ export class DocumentSession {
   private maxWaitTimer?: ReturnType<typeof setTimeout>;
   private retryTimer?: ReturnType<typeof setTimeout>;
   private destroyed = false;
+  private readonly awareness: DocumentAwareness;
 
   constructor(
     readonly documentId: number,
@@ -54,6 +61,11 @@ export class DocumentSession {
   ) {
     this.updatesSinceCompaction = pendingUpdates;
     doc.on('update', this.onUpdate);
+    this.awareness = new DocumentAwareness(doc, (update, origin) => {
+      const frame = awarenessFrame(this.documentId, update);
+      for (const connection of this.members.keys())
+        if (connection !== origin) connection.sendBinary(frame);
+    });
   }
 
   get hasMembers() {
@@ -66,6 +78,7 @@ export class DocumentSession {
 
   removeMember(connection: Connection) {
     this.members.delete(connection);
+    this.awareness.release(connection);
   }
 
   /** Applies a role change; the connection is told what it may do now. */
@@ -76,13 +89,23 @@ export class DocumentSession {
     this.announceAccess(connection, canEdit);
   }
 
-  /** Starts the sync handshake from the server's side: it asks for what it is missing. */
+  /**
+   * Starts the sync handshake from the server's side: it asks for what it is missing and shows the
+   * newcomer who else is here.
+   */
   greet(connection: Connection) {
     connection.sendBinary(
       encodeFrame(this.documentId, FrameKind.Sync, (encoder) =>
         syncProtocol.writeSyncStep1(encoder, this.doc),
       ),
     );
+    const others = this.awareness.snapshot();
+    if (others) connection.sendBinary(awarenessFrame(this.documentId, others));
+  }
+
+  /** Cursor and selection updates; members who may only read can share theirs too. */
+  receiveAwareness(connection: Connection, payload: Uint8Array) {
+    if (this.members.has(connection)) this.awareness.receive(connection, payload);
   }
 
   /**

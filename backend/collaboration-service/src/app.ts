@@ -6,6 +6,7 @@ import type { ErrorReporter, PersistenceOptions } from './documents/document-ses
 import { DocumentMarkdownReader } from './documents/document-markdown-reader';
 import { DocumentSessionManager } from './documents/document-session-manager';
 import { ChatHandler } from './handlers/chat-handler';
+import { DocumentAwarenessHandler } from './handlers/document-awareness-handler';
 import { DocumentJoinHandler } from './handlers/document-join-handler';
 import { DocumentLeaveHandler } from './handlers/document-leave-handler';
 import { DocumentSyncHandler } from './handlers/document-sync-handler';
@@ -66,6 +67,7 @@ export function createApp({
       new DocumentJoinHandler(documentAccess, documents, enforcer),
       new DocumentLeaveHandler(documents),
       new DocumentSyncHandler(documents),
+      new DocumentAwarenessHandler(documents),
     ],
     clock,
   );
