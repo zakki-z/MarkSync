@@ -11,6 +11,8 @@ The implemented walking skeleton uses Next.js 16 / React 19 / Tailwind 4, FastAP
 
 Presence authenticates upgrades, checks document ownership before joining, deduplicates users across connections, and handles heartbeat/disconnect cleanup. Documents remain private: two sessions of the same owner produce one roster entry with two active sessions. Two distinct accounts cannot share a document without a future sharing design. Task 1 contains no concurrent editing, Yjs, MongoDB, Kafka, permission events, or CRDT persistence. References to those technologies below describe proposed later phases, not currently deployed services. The Markdown preview is an escaped React-rendered subset; remark/rehype remains a future parser option.
 
+**Update (2026-11-11):** the Task 1 presence described above, scoped to a document owner's rooms, was replaced by workspace-scoped presence with permission checks, revalidation and messaging; see [ADR-005](ADR-005-workspace-presence.md).
+
 The original decision format and AI prompt appendix below are preserved. This implementation update records repository behavior, not a new AI consultation or peer acceptance.
 
 ## Context

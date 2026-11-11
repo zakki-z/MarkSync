@@ -10,7 +10,8 @@ import {
   type DocumentDraft,
   type DocumentVisibility,
 } from '@/src/documentService';
-import { OnlineUsers } from '@/src/components/OnlineUsers';
+import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
+import { useMembership } from '@/src/hooks/useMembership';
 import { prettyDate } from '@/src/format';
 import { MarkdownPreview } from '@/src/MarkdownPreview';
 
@@ -21,6 +22,27 @@ type Props = {
   onDeleted: () => void;
   onSessionExpired: () => void;
 };
+
+/** Presence is for members: a signed-in visitor of a public document gets no panel. */
+function MemberPresence({
+  workspaceId,
+  userId,
+  onSessionExpired,
+}: {
+  workspaceId: number;
+  userId: number;
+  onSessionExpired: () => void;
+}) {
+  const { data: membership } = useMembership(workspaceId);
+  if (!membership) return null;
+  return (
+    <WorkspacePresencePanel
+      workspaceId={workspaceId}
+      currentUserId={userId}
+      onSessionExpired={onSessionExpired}
+    />
+  );
+}
 
 const toDraft = (doc: DocumentDTO): DocumentDraft => ({
   title: doc.title,
@@ -120,7 +142,13 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
       </header>
 
       <div className="editor-body">
-        {user && <OnlineUsers documentId={saved.id} onSessionExpired={onSessionExpired} />}
+        {user && (
+          <MemberPresence
+            workspaceId={saved.workspaceId}
+            userId={user.id}
+            onSessionExpired={onSessionExpired}
+          />
+        )}
         <div className="editor-heading">
           <span className="eyebrow">MARKDOWN DOCUMENT</span>
           {readOnly ? (

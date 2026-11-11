@@ -72,8 +72,9 @@ services:
     environment:
       PORT: "3001"
       AUTH_SERVICE_URL: http://auth:8000
-      DOCUMENT_SERVICE_URL: http://document:8082
+      WORKSPACE_SERVICE_URL: http://workspace:8083
       APP_ORIGINS: ${APP_ORIGINS:-http://127.0.0.1:8080,http://localhost:8080}
+      REVALIDATE_INTERVAL_MS: ${REVALIDATE_INTERVAL_MS:-10000}
     volumes:
       - ./backend/collaboration-service:/app
       - collaboration_node_modules:/app/node_modules
