@@ -83,14 +83,55 @@ test.describe('signed in', () => {
     await expect(page.getByLabel('Document title')).toHaveValue('Untitled document');
   });
 
-  test('workspace switcher navigates between workspaces', async ({ page }) => {
+  test('lists workspaces in the sidebar, navigates, and keeps the profile in the corner', async ({
+    page,
+  }) => {
     await page.route('**/api/workspaces', (route) =>
       route.fulfill({ json: [workspace, { ...workspace, id: 4, name: 'Team' }] }),
     );
     await page.route('**/api/workspaces/*/documents', (route) => route.fulfill({ json: [] }));
     await page.goto('/w/1');
-    await page.getByLabel('Workspace').selectOption({ label: 'Team' });
+    await page.getByRole('link', { name: 'Team' }).click();
     await expect(page).toHaveURL('/w/4');
+    const profile = await page.locator('.profile-bar').boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(profile!.y + profile!.height).toBeGreaterThan(viewport.height - 40);
+  });
+
+  test('pins up to three workspaces and remembers them', async ({ page }) => {
+    const names = ['Personal', 'Team', 'Uni', 'Side', 'Work'];
+    await page.route('**/api/workspaces', (route) =>
+      route.fulfill({ json: names.map((name, i) => ({ ...workspace, id: i + 1, name })) }),
+    );
+    await page.route('**/api/workspaces/*/documents', (route) => route.fulfill({ json: [] }));
+    await page.goto('/w/1');
+    for (const name of ['Work', 'Side', 'Uni'])
+      await page.getByRole('button', { name: `Pin ${name}` }).click();
+    await expect(page.getByRole('heading', { name: 'Pinned' })).toBeVisible();
+    await page.getByRole('button', { name: 'Pin Team' }).click();
+    await expect(page.locator('.alert.error')).toContainText('up to 3 workspaces');
+    await expect(page.getByRole('button', { name: 'Unpin Work' })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Unpin Uni' })).toBeVisible();
+    await page.getByRole('button', { name: 'Unpin Uni' }).click();
+    await page.getByRole('button', { name: 'Pin Team' }).click();
+    await expect(page.getByRole('button', { name: 'Unpin Team' })).toBeVisible();
+  });
+
+  test('pins up to three documents and lists them first', async ({ page }) => {
+    const docs = [1, 2, 3, 4].map((id) => document({ id, title: `Doc ${id}` }));
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: docs }));
+    await page.goto('/w/1');
+    await page.getByRole('button', { name: 'Pin Doc 4' }).click();
+    await expect(page.locator('.document-item').first()).toContainText('Doc 4');
+    await page.getByRole('button', { name: 'Pin Doc 3' }).click();
+    await page.getByRole('button', { name: 'Pin Doc 2' }).click();
+    await page.getByRole('button', { name: 'Pin Doc 1' }).click();
+    await expect(page.locator('.alert.error')).toContainText('up to 3 documents');
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Unpin Doc 4' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Pin Doc 1' })).toBeVisible();
   });
 
   test('shows the API error when creating a document is forbidden', async ({ page }) => {

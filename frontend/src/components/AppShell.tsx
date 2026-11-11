@@ -4,8 +4,9 @@ import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AuthUser } from '@/src/authService';
 import { Brand } from '@/src/components/ui';
-import { WorkspaceSwitcher } from '@/src/components/WorkspaceSwitcher';
+import { WorkspaceList } from '@/src/components/WorkspaceList';
 import { useEndSession } from '@/src/hooks/useEndSession';
+import { MAX_PINS, usePins } from '@/src/hooks/usePins';
 import { useWorkspaces } from '@/src/hooks/useWorkspaces';
 import { createWorkspace } from '@/src/workspaceService';
 
@@ -23,6 +24,11 @@ export function AppShell({
   const endSession = useEndSession();
   const { data: workspaces, setData: setWorkspaces } = useWorkspaces();
   const [error, setError] = useState('');
+  const pins = usePins(`marksync:pins:workspaces:${user.id}`);
+
+  const togglePin = (id: number) => {
+    setError(pins.toggle(id) ? '' : `You can pin up to ${MAX_PINS} workspaces. Unpin one first.`);
+  };
 
   const addWorkspace = async () => {
     const name = window.prompt('Name of the new workspace')?.trim();
@@ -42,12 +48,15 @@ export function AppShell({
         <div className="sidebar-brand">
           <Brand />
         </div>
+        <button type="button" className="button subtle new-workspace" onClick={addWorkspace}>
+          + New workspace
+        </button>
         {workspaces && (
-          <WorkspaceSwitcher
+          <WorkspaceList
             workspaces={workspaces}
             activeId={activeWorkspaceId}
-            onSelect={(id) => router.push(`/w/${id}`)}
-            onCreate={addWorkspace}
+            pinned={pins.pinned}
+            onTogglePin={togglePin}
           />
         )}
         {error && (

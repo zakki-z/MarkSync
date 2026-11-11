@@ -76,7 +76,7 @@ export default function WorkspaceDashboard() {
             {createError}
           </div>
         )}
-        <DocumentList workspaceId={workspaceId} documents={documents} />
+        <DocumentList workspaceId={workspaceId} userId={user.id} documents={documents} />
       </div>
     </AppShell>
   );

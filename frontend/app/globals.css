@@ -130,7 +130,10 @@ body {
   display: flex;
   flex-direction: column;
   background: #fff;
-  min-height: 100vh;
+  /* Fixed to the viewport so the profile stays in the bottom corner while the page scrolls. */
+  position: sticky;
+  top: 0;
+  height: 100vh;
   border-right: 1px solid var(--line);
   padding: 26px 16px 16px;
 }
@@ -235,6 +238,7 @@ body {
   margin: 20px 10px;
 }
 .profile-bar {
+  margin-top: auto;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -545,7 +549,8 @@ body {
     flex-direction: column;
   }
   .sidebar {
-    min-height: auto;
+    position: static;
+    height: auto;
     padding: 13px 15px 10px;
     border-bottom: 1px solid var(--line);
     border-right: none;
@@ -622,12 +627,6 @@ body {
 .workspace.public-view {
   grid-template-columns: minmax(0, 1fr);
 }
-.workspace-switcher {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
 .readonly-badge {
   margin-left: 12px;
   padding: 2px 8px;
@@ -646,4 +645,80 @@ body {
 .workspace .document-item {
   text-decoration: none;
   color: inherit;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.sidebar-heading {
+  margin: 14px 8px 6px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 730;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.list-row,
+.document-row {
+  display: flex;
+  align-items: center;
+  border-radius: 9px;
+}
+.list-row:hover,
+.list-row.selected {
+  background: #f5f8fd;
+}
+.list-row.selected {
+  background: #ecf5ff;
+  color: #075ab5;
+}
+.list-row-link {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-row .document-item {
+  flex: 1;
+}
+.workspace .pin-button {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-right: 4px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 16px;
+  opacity: 0;
+}
+.list-row:hover .pin-button,
+.document-row:hover .pin-button,
+.pin-button:focus-visible,
+.pin-button.pinned {
+  opacity: 1;
+}
+.pin-button.pinned {
+  color: #d99a00;
+}
+.new-workspace {
+  margin-bottom: 4px;
 }
