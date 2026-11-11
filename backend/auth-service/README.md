@@ -29,9 +29,13 @@ Open <http://localhost:8000/docs> for the API. The frontend runs separately at <
 ## API endpoints
 
 - `GET /health`: health check.
-- `POST /auth/signup`: register with `email` and an 8–128 character `password`. Additional role input cannot grant administrator privileges.
+- `POST /auth/signup`: register with `email`, an 8–128 character `password` and an optional `username` (3–32 letters, numbers, `.`, `_` or `-`, case-insensitive and unique; derived from the email when omitted). Additional role input cannot grant administrator privileges.
 - `POST /auth/login`: submit JSON `email` and `password` to receive an access token.
 - `GET /auth/me`: retrieve the stored profile with `Authorization: Bearer <token>`.
+- `GET /auth/users/lookup?q=`: find one account by exact username or email (case-insensitive). Requires a bearer token, returns only `{id, username}`, `404` when nothing matches and never partial matches.
+- `GET /auth/users?ids=1&ids=2`: resolve up to 100 user ids to `{id, username}`. Requires a bearer token.
+
+Startup adds and backfills `users.username` on databases created before usernames existed (`app.database.upgrade_schema`), because `create_all` does not alter existing tables.
 
 ## Checks
 
