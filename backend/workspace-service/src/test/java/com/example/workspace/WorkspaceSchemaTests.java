@@ -9,6 +9,7 @@ import com.example.workspace.entity.WorkspaceVisibility;
 import com.example.workspace.repository.WorkspaceInvitationRepository;
 import com.example.workspace.repository.WorkspaceMemberRepository;
 import com.example.workspace.repository.WorkspaceRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,6 +38,12 @@ class WorkspaceSchemaTests {
     WorkspaceInvitationRepository invitations;
     @Autowired
     JdbcTemplate jdbc;
+
+    @BeforeEach
+    void startFromAnEmptyDatabase() {
+        // Other test classes share this database; this runs inside the test's rolled-back transaction.
+        jdbc.update("DELETE FROM workspaces");
+    }
 
     private Workspace newWorkspace(WorkspaceVisibility visibility) {
         return workspaces.saveAndFlush(new Workspace("Team notes", visibility, "1"));
