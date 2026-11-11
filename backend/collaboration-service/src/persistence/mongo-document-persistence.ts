@@ -65,7 +65,7 @@ export class MongoDocumentPersistence implements DocumentPersistence {
     ]);
     await this.snapshots.replaceOne(
       { _id: documentId },
-      { _id: documentId, state: new Binary(state), upToSeq: last.seq, updatedAt: new Date() },
+      { state: new Binary(state), upToSeq: last.seq, updatedAt: new Date() },
       { upsert: true },
     );
     await this.updates.deleteMany({ documentId, seq: { $lte: last.seq } });
