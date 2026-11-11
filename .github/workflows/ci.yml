@@ -15,7 +15,8 @@ permissions:
 jobs:
   frontend:
     name: Frontend (Next.js)
-    runs-on: ubuntu-latest
+    # Playwright's browser dependencies are installed with apt, so use the image it supports.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -42,6 +43,7 @@ jobs:
         run: bun run build
 
       - name: Install Playwright
+        timeout-minutes: 5
         run: bun x playwright install --with-deps chromium
 
       - name: Run frontend tests
@@ -129,7 +131,7 @@ jobs:
 
   walking-skeleton:
     name: Walking skeleton (Compose and Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -144,6 +146,7 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: frontend
+        timeout-minutes: 5
         run: bun x playwright install --with-deps chromium
 
       - name: Generate isolated local secrets
