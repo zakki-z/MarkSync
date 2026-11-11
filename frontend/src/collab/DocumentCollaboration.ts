@@ -290,7 +290,9 @@ export class DocumentCollaboration {
   }
 
   private transmitFrame(kind: FrameKind, write: (encoder: encoding.Encoder) => void) {
-    this.send(encodeFrame(this.documentId, kind, write));
+    const encoder = encoding.createEncoder();
+    write(encoder);
+    this.send(encodeFrame(this.documentId, kind, encoding.toUint8Array(encoder)));
   }
 
   private send(data: string | Uint8Array) {

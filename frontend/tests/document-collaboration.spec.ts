@@ -5,9 +5,20 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 import { DocumentCollaboration, type DocumentSocket } from '../src/collab/DocumentCollaboration';
-import { decodeFrame, encodeFrame, FrameKind } from '../src/collab/frames';
+import { decodeFrame, encodeFrame as encodeBytes, FrameKind } from '../src/collab/frames';
 import { CloseCode, ErrorCode, HEARTBEAT_INTERVAL_MS } from '../src/presence/protocol';
 import type { Scheduler } from '../src/presence/WorkspacePresenceClient';
+
+/** A frame whose payload is written with lib0, like the provider does. */
+function makeFrame(
+  documentId: number,
+  kind: FrameKind,
+  write: (encoder: encoding.Encoder) => void,
+) {
+  const encoder = encoding.createEncoder();
+  write(encoder);
+  return encodeBytes(documentId, kind, encoding.toUint8Array(encoder));
+}
 
 const DOCUMENT = 4;
 const OPEN = 1;
@@ -114,7 +125,7 @@ class FakeService {
   accept(socket: FakeSocket) {
     socket.receive({ type: 'document-access', documentId: DOCUMENT, canEdit: this.canEdit });
     socket.receiveFrame(
-      encodeFrame(DOCUMENT, FrameKind.Sync, (e) => syncProtocol.writeSyncStep1(e, this.doc)),
+      makeFrame(DOCUMENT, FrameKind.Sync, (e) => syncProtocol.writeSyncStep1(e, this.doc)),
     );
   }
   /** Processes everything the client sent since the last call and answers it. */
@@ -129,7 +140,7 @@ class FakeService {
       syncProtocol.readSyncMessage(decoder, reply, this.doc, 'client');
       if (encoding.length(reply) > 0)
         socket.receiveFrame(
-          encodeFrame(DOCUMENT, FrameKind.Sync, (e) =>
+          makeFrame(DOCUMENT, FrameKind.Sync, (e) =>
             encoding.writeUint8Array(e, encoding.toUint8Array(reply)),
           ),
         );
@@ -144,7 +155,7 @@ class FakeService {
     this.doc.off('update', collect);
     for (const update of updates)
       socket.receiveFrame(
-        encodeFrame(DOCUMENT, FrameKind.Sync, (e) => syncProtocol.writeUpdate(e, update)),
+        makeFrame(DOCUMENT, FrameKind.Sync, (e) => syncProtocol.writeUpdate(e, update)),
       );
   }
 }
@@ -257,7 +268,7 @@ test.describe('connecting and syncing', () => {
     socket.receive({ type: 'document-access', documentId: 99, canEdit: false });
     socket.receive({ type: 'error', code: ErrorCode.Forbidden, message: 'm', documentId: 99 });
     socket.receiveFrame(
-      encodeFrame(99, FrameKind.Sync, (e) => encoding.writeUint8Array(e, new Uint8Array([1]))),
+      makeFrame(99, FrameKind.Sync, (e) => encoding.writeUint8Array(e, new Uint8Array([1]))),
     );
     socket.onmessage?.({ data: new Uint8Array([255, 255]).buffer } as MessageEvent);
     socket.onmessage?.({ data: 'not json' } as MessageEvent);
@@ -313,7 +324,7 @@ test.describe('reconnecting', () => {
     const remote = new awarenessProtocol.Awareness(new Y.Doc());
     remote.setLocalState({ user: { name: 'ada' }, cursor: null });
     socket.receiveFrame(
-      encodeFrame(DOCUMENT, FrameKind.Awareness, (e) =>
+      makeFrame(DOCUMENT, FrameKind.Awareness, (e) =>
         encoding.writeVarUint8Array(
           e,
           awarenessProtocol.encodeAwarenessUpdate(remote, [remote.clientID]),

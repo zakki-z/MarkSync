@@ -54,9 +54,7 @@ test('the frontend frame codec reads what the server writes and the other way ro
     const fromServer = serverFrames.encodeFrame(300, kind, (e) =>
       encoding.writeUint8Array(e, payload),
     );
-    const fromFrontend = frontendFrames.encodeFrame(300, kind, (e) =>
-      encoding.writeUint8Array(e, payload),
-    );
+    const fromFrontend = frontendFrames.encodeFrame(300, kind, payload);
     expect(fromFrontend).toEqual(fromServer);
     expect(frontendFrames.decodeFrame(fromServer)).toEqual({ documentId: 300, kind, payload });
     expect(serverFrames.decodeFrame(fromFrontend)).toEqual({ documentId: 300, kind, payload });

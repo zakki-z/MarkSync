@@ -4,7 +4,18 @@ import * as encoding from 'lib0/encoding';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
-import { decodeFrame, encodeFrame, FrameKind } from '../../src/collab/frames';
+import { decodeFrame, encodeFrame as encodeBytes, FrameKind } from '../../src/collab/frames';
+
+/** A frame whose payload is written with lib0, like the provider does. */
+function makeFrame(
+  documentId: number,
+  kind: FrameKind,
+  write: (encoder: encoding.Encoder) => void,
+) {
+  const encoder = encoding.createEncoder();
+  write(encoder);
+  return encodeBytes(documentId, kind, encoding.toUint8Array(encoder));
+}
 
 /**
  * A stand-in for the collaboration service in browser tests: it speaks the same protocol (document
@@ -66,7 +77,7 @@ export async function mockCollaboration(
       doc.off('update', collect);
       for (const update of updates)
         broadcast((id) =>
-          encodeFrame(id, FrameKind.Sync, (e) => syncProtocol.writeUpdate(e, update)),
+          makeFrame(id, FrameKind.Sync, (e) => syncProtocol.writeUpdate(e, update)),
         );
     },
     showCursor(name, color, index) {
@@ -77,7 +88,7 @@ export async function mockCollaboration(
       });
       const update = awarenessProtocol.encodeAwarenessUpdate(remote, [remote.clientID]);
       broadcast((id) =>
-        encodeFrame(id, FrameKind.Awareness, (e) => encoding.writeVarUint8Array(e, update)),
+        makeFrame(id, FrameKind.Awareness, (e) => encoding.writeVarUint8Array(e, update)),
       );
     },
     dropConnections() {
@@ -113,7 +124,7 @@ export async function mockCollaboration(
         );
         route.send(
           Buffer.from(
-            encodeFrame(parsed.documentId!, FrameKind.Sync, (e) =>
+            makeFrame(parsed.documentId!, FrameKind.Sync, (e) =>
               syncProtocol.writeSyncStep1(e, doc),
             ),
           ),
@@ -131,7 +142,7 @@ export async function mockCollaboration(
       if (encoding.length(reply) > 0)
         route.send(
           Buffer.from(
-            encodeFrame(frame.documentId, FrameKind.Sync, (e) =>
+            makeFrame(frame.documentId, FrameKind.Sync, (e) =>
               encoding.writeUint8Array(e, encoding.toUint8Array(reply)),
             ),
           ),
