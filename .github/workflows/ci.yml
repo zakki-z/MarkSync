@@ -15,7 +15,6 @@ permissions:
 jobs:
   frontend:
     name: Frontend (Next.js)
-    # Playwright's browser dependencies are installed with apt, so use the image it supports.
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -42,9 +41,10 @@ jobs:
       - name: Build frontend
         run: bun run build
 
+      # No --with-deps: the runner image already has Chromium's libraries, and apt mirrors were unreachable.
       - name: Install Playwright
         timeout-minutes: 5
-        run: bun x playwright install --with-deps chromium
+        run: bun x playwright install chromium
 
       - name: Run frontend tests
         run: bun run test:e2e
@@ -147,7 +147,7 @@ jobs:
       - name: Install Playwright browsers
         working-directory: frontend
         timeout-minutes: 5
-        run: bun x playwright install --with-deps chromium
+        run: bun x playwright install chromium
 
       - name: Generate isolated local secrets
         run: |
