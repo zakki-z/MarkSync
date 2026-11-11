@@ -213,5 +213,128 @@ def test_signup_password_validation_never_echoes_credentials(password: str) -> N
         "/auth/signup", json={"email": "safe@example.com", "password": password}
     )
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid email or password length"}
+    assert response.json() == {"detail": "Invalid email, username or password length"}
     assert "input" not in response.text
+
+
+def _signup(email: str, username: str | None = None) -> dict[str, object]:
+    body = {"email": email, "password": "password123"}
+    if username is not None:
+        body["username"] = username
+    res = client.post("/auth/signup", json=body)
+    assert res.status_code == 201, res.text
+    data: dict[str, object] = res.json()
+    return data
+
+
+def _token(email: str) -> dict[str, str]:
+    res = client.post("/auth/login", json={"email": email, "password": "password123"})
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
+def test_signup_stores_lowercase_username_and_derives_one_when_omitted() -> None:
+    assert _signup("a@example.com", "Amber_L")["username"] == "amber_l"
+    assert _signup("jane.doe@example.com")["username"] == "jane.doe"
+    assert _signup("jane.doe@other.org")["username"] == "jane.doe-2"
+    assert _signup("x@example.com")["username"] == "x00"
+
+
+def test_signup_rejects_taken_and_malformed_usernames() -> None:
+    _signup("a@example.com", "amber")
+    taken = client.post(
+        "/auth/signup",
+        json={"email": "b@example.com", "password": "password123", "username": "AMBER"},
+    )
+    assert taken.status_code == 400
+    assert taken.json()["detail"] == "Username already taken"
+    for bad in ["ab", "has space", "a@b.com", "x" * 33, "-lead"]:
+        res = client.post(
+            "/auth/signup",
+            json={"email": "c@example.com", "password": "password123", "username": bad},
+        )
+        assert res.status_code == 422, bad
+
+
+def test_lookup_finds_a_user_by_username_or_email_with_a_minimal_response() -> None:
+    created = _signup("Amber@Example.com", "amber")
+    _signup("caller@example.com", "caller")
+    headers = _token("caller@example.com")
+    for query in [
+        "amber",
+        "AMBER",
+        " amber ",
+        "amber@example.com",
+        "AMBER@EXAMPLE.COM",
+    ]:
+        res = client.get("/auth/users/lookup", params={"q": query}, headers=headers)
+        assert res.status_code == 200, query
+        assert res.json() == {"id": created["id"], "username": "amber"}
+
+
+def test_lookup_requires_authentication_and_reveals_nothing_to_anonymous_callers() -> (
+    None
+):
+    _signup("amber@example.com", "amber")
+    for query in ["amber", "amber@example.com", "nobody@example.com"]:
+        res = client.get("/auth/users/lookup", params={"q": query})
+        assert res.status_code == 401
+        assert "amber" not in res.text
+
+
+def test_lookup_returns_404_for_unknown_and_partial_matches() -> None:
+    _signup("amber@example.com", "amber")
+    headers = _token("amber@example.com")
+    for query in ["ambe", "am%", "amber@example", "nobody", "nobody@example.com"]:
+        res = client.get("/auth/users/lookup", params={"q": query}, headers=headers)
+        assert res.status_code == 404, query
+
+
+def test_users_are_resolved_by_id_without_exposing_emails() -> None:
+    first = _signup("one@example.com", "one")
+    second = _signup("two@example.com", "two")
+    headers = _token("one@example.com")
+    res = client.get(
+        "/auth/users", params={"ids": [second["id"], first["id"], 999]}, headers=headers
+    )
+    assert res.status_code == 200
+    assert res.json() == [
+        {"id": first["id"], "username": "one"},
+        {"id": second["id"], "username": "two"},
+    ]
+    assert client.get("/auth/users", params={"ids": [1]}).status_code == 401
+    assert (
+        client.get("/auth/users", params={"ids": ["x"]}, headers=headers).status_code
+        == 422
+    )
+
+
+def test_existing_users_get_a_unique_username_when_the_schema_is_upgraded() -> None:
+    from sqlalchemy import text
+
+    from app import database
+
+    legacy = create_engine("sqlite:///:memory:", poolclass=StaticPool)
+    with legacy.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, email VARCHAR NOT NULL, "
+                "hashed_password VARCHAR NOT NULL, role VARCHAR NOT NULL)"
+            )
+        )
+        for user_id, email in [(1, "sam@a.com"), (2, "sam@b.com"), (3, "!!@c.com")]:
+            conn.execute(
+                text("INSERT INTO users VALUES (:i, :e, 'x', 'user')"),
+                {"i": user_id, "e": email},
+            )
+    original = database.engine
+    database.engine = legacy
+    try:
+        database.upgrade_schema()
+        database.upgrade_schema()  # idempotent
+    finally:
+        database.engine = original
+    with legacy.connect() as conn:
+        rows = (
+            conn.execute(text("SELECT username FROM users ORDER BY id")).scalars().all()
+        )
+    assert rows == ["sam", "sam-2", "000"]
