@@ -1,2 +1,3 @@
 node_modules
 bun.lock
+tests/chaos.test.ts
