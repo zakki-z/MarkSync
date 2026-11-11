@@ -2,7 +2,7 @@ import type { CloseCode, PublicUser, ServerMessage } from './protocol';
 
 /** What a connection needs from the underlying socket; Bun's ServerWebSocket satisfies it. */
 export interface Transport {
-  send(data: string): unknown;
+  send(data: string | Uint8Array): unknown;
   close(code: number, reason: string): void;
 }
 
@@ -34,6 +34,10 @@ export class Connection {
 
   send(message: ServerMessage) {
     if (this.open) this.transport.send(JSON.stringify(message));
+  }
+
+  sendBinary(frame: Uint8Array) {
+    if (this.open) this.transport.send(frame);
   }
 
   close(code: CloseCode, reason: string) {

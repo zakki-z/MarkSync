@@ -27,6 +27,11 @@ export class DocumentSessionManager {
     return this.sessions.get(documentId);
   }
 
+  /** The session a connection has joined, if it has joined it. */
+  sessionOf(connection: Connection, documentId: number): DocumentSession | undefined {
+    return connection.documents.has(documentId) ? this.sessions.get(documentId) : undefined;
+  }
+
   /** The connection must already be authorized. Returns undefined if it closed while loading. */
   async join(connection: Connection, documentId: number, grant: DocumentGrant) {
     const session = this.sessions.get(documentId) ?? (await this.load(documentId, grant.markdown));
@@ -37,6 +42,11 @@ export class DocumentSessionManager {
     session.addMember(connection, grant.canEdit);
     connection.documents.add(documentId);
     return session;
+  }
+
+  /** Applies a role change found by revalidation to the connection's session. */
+  setCanEdit(connection: Connection, documentId: number, canEdit: boolean) {
+    this.sessionOf(connection, documentId)?.setCanEdit(connection, canEdit);
   }
 
   /** Resolves once the session was evicted, or failed to store its last updates (it stays open). */

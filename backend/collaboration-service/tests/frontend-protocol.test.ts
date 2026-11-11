@@ -18,11 +18,13 @@ test('the frontend parser accepts every message the server can send', () => {
     { type: 'presence', workspaceId: 7, users: [user] },
     { type: 'message', workspaceId: 7, sender: user, text: 'hi', sentAt: '2026-11-11T10:00:00Z' },
     { type: 'heartbeat' },
+    { type: 'document-access', documentId: 4, canEdit: false },
     ...Object.values(server.ErrorCode).map((code): server.ServerMessage => ({
       type: 'error',
       code,
       message: 'm',
       workspaceId: 7,
+      documentId: 4,
     })),
   ];
   for (const message of messages)
@@ -35,6 +37,8 @@ test('the server parser accepts every message the frontend can send', () => {
     { type: 'leave', workspaceId: 7 },
     { type: 'heartbeat' },
     { type: 'message', workspaceId: 7, text: 'hi' },
+    { type: 'document-join', documentId: 4 },
+    { type: 'document-leave', documentId: 4 },
   ];
   for (const message of messages)
     expect(server.parseClientMessage(JSON.stringify(message))).toEqual(message);

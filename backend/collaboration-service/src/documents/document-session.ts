@@ -1,5 +1,9 @@
+import * as decoding from 'lib0/decoding';
+import * as encoding from 'lib0/encoding';
+import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 import type { Connection } from '../connection';
+import { encodeFrame, FrameKind } from '../document-frames';
 import type { DocumentPersistence } from '../persistence/document-persistence';
 
 export type PersistenceOptions = {
@@ -49,7 +53,7 @@ export class DocumentSession {
     private readonly dependencies: SessionDependencies,
   ) {
     this.updatesSinceCompaction = pendingUpdates;
-    doc.on('update', this.buffer);
+    doc.on('update', this.onUpdate);
   }
 
   get hasMembers() {
@@ -62,6 +66,59 @@ export class DocumentSession {
 
   removeMember(connection: Connection) {
     this.members.delete(connection);
+  }
+
+  /** Applies a role change; the connection is told what it may do now. */
+  setCanEdit(connection: Connection, canEdit: boolean) {
+    const member = this.members.get(connection);
+    if (!member || member.canEdit === canEdit) return;
+    member.canEdit = canEdit;
+    this.announceAccess(connection, canEdit);
+  }
+
+  /** Starts the sync handshake from the server's side: it asks for what it is missing. */
+  greet(connection: Connection) {
+    connection.sendBinary(
+      encodeFrame(this.documentId, FrameKind.Sync, (encoder) =>
+        syncProtocol.writeSyncStep1(encoder, this.doc),
+      ),
+    );
+  }
+
+  /**
+   * Handles one y-protocols sync message. Anyone who joined may ask for state (step 1), but only
+   * editors may change the document: updates from anyone else are dropped, never applied. Throws
+   * on a message that is not valid; nothing has been applied then.
+   */
+  receiveSync(connection: Connection, payload: Uint8Array) {
+    const member = this.members.get(connection);
+    if (!member) return;
+    const decoder = decoding.createDecoder(payload);
+    const type = decoding.readVarUint(decoder);
+    if (type === syncProtocol.messageYjsSyncStep1) {
+      this.replyToStateRequest(connection, decoder);
+      return;
+    }
+    if (type !== syncProtocol.messageYjsSyncStep2 && type !== syncProtocol.messageYjsUpdate)
+      throw new Error('Unknown sync message type');
+    const update = decoding.readVarUint8Array(decoder);
+    // y-protocols logs and swallows a malformed update, so check it first to be able to refuse it.
+    Y.decodeUpdate(update);
+    if (!member.canEdit) {
+      this.announceAccess(connection, false);
+      return;
+    }
+    Y.applyUpdate(this.doc, update, connection);
+  }
+
+  private replyToStateRequest(connection: Connection, decoder: decoding.Decoder) {
+    const reply = encoding.createEncoder();
+    syncProtocol.readSyncStep1(decoder, reply, this.doc);
+    connection.sendBinary(
+      encodeFrame(this.documentId, FrameKind.Sync, (encoder) =>
+        encoding.writeUint8Array(encoder, encoding.toUint8Array(reply)),
+      ),
+    );
   }
 
   /** Writes everything buffered. Rejects if the write fails; a retry is already scheduled then. */
@@ -77,12 +134,22 @@ export class DocumentSession {
     this.destroyed = true;
     this.clearTimers();
     clearTimeout(this.retryTimer);
-    this.doc.off('update', this.buffer);
+    this.doc.off('update', this.onUpdate);
     this.doc.destroy();
     this.members.clear();
   }
 
-  private readonly buffer = (update: Uint8Array) => {
+  /** Every change is stored and sent to the other members, whoever made it. */
+  private readonly onUpdate = (update: Uint8Array, origin: unknown) => {
+    this.buffer(update);
+    const frame = encodeFrame(this.documentId, FrameKind.Sync, (encoder) =>
+      syncProtocol.writeUpdate(encoder, update),
+    );
+    for (const connection of this.members.keys())
+      if (connection !== origin) connection.sendBinary(frame);
+  };
+
+  private buffer(update: Uint8Array) {
     this.pending.push(update);
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(
@@ -93,7 +160,11 @@ export class DocumentSession {
       () => this.flushInBackground(),
       this.dependencies.options.maxWaitMs,
     );
-  };
+  }
+
+  private announceAccess(connection: Connection, canEdit: boolean) {
+    connection.send({ type: 'document-access', documentId: this.documentId, canEdit });
+  }
 
   private flushInBackground() {
     // A failure was already reported and a retry scheduled by `write`.

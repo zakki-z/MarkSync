@@ -30,13 +30,16 @@ export type ClientMessage =
   | { type: 'join'; workspaceId: number }
   | { type: 'leave'; workspaceId: number }
   | { type: 'heartbeat' }
-  | { type: 'message'; workspaceId: number; text: string };
+  | { type: 'message'; workspaceId: number; text: string }
+  | { type: 'document-join'; documentId: number }
+  | { type: 'document-leave'; documentId: number };
 
 export type ServerMessage =
   | { type: 'presence'; workspaceId: number; users: PublicUser[] }
   | { type: 'message'; workspaceId: number; sender: PublicUser; text: string; sentAt: string }
   | { type: 'heartbeat' }
-  | { type: 'error'; code: ErrorCode; message: string; workspaceId?: number };
+  | { type: 'document-access'; documentId: number; canEdit: boolean }
+  | { type: 'error'; code: ErrorCode; message: string; workspaceId?: number; documentId?: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -64,6 +67,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   }
   if (!isRecord(data)) return null;
   const workspaceId = data.workspaceId;
+  const documentId = data.documentId;
   switch (data.type) {
     case 'heartbeat':
       return { type: 'heartbeat' };
@@ -90,6 +94,10 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
             sentAt: data.sentAt,
           }
         : null;
+    case 'document-access':
+      return typeof documentId === 'number' && typeof data.canEdit === 'boolean'
+        ? { type: 'document-access', documentId, canEdit: data.canEdit }
+        : null;
     case 'error':
       return ERROR_CODES.includes(data.code) && typeof data.message === 'string'
         ? {
@@ -97,6 +105,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
             code: data.code as ErrorCode,
             message: data.message,
             ...(typeof workspaceId === 'number' && { workspaceId }),
+            ...(typeof documentId === 'number' && { documentId }),
           }
         : null;
     default:

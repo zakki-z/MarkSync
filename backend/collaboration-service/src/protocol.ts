@@ -1,5 +1,8 @@
+import { decodeFrame, FrameKind } from './document-frames';
+
 /**
- * The workspace presence protocol: JSON text frames, one message per frame. The frontend keeps a
+ * The collaboration protocol. Control messages are JSON text frames, one message per frame; Yjs
+ * sync and awareness payloads are binary frames (see `document-frames.ts`). The frontend keeps a
  * mirror of this file in `frontend/src/presence/protocol.ts`; a test fails if the two drift apart.
  */
 
@@ -25,8 +28,10 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 export const HEARTBEAT_INTERVAL_MS = 15_000;
 export const MAX_TEXT_LENGTH = 2000;
-/** Generous upper bound for one frame: a maximal text of 4-byte characters plus the envelope. */
+/** Generous upper bound for one JSON frame: a maximal text of 4-byte characters plus the envelope. */
 export const MAX_FRAME_BYTES = 16 * 1024;
+/** Upper bound for one binary frame. A document holds at most 1,000,000 characters. */
+export const MAX_BINARY_FRAME_BYTES = 4 * 1024 * 1024;
 
 /** The only user data other members ever see: no email, no token. */
 export type PublicUser = { id: number; displayName: string };
@@ -35,13 +40,19 @@ export type ClientMessage =
   | { type: 'join'; workspaceId: number }
   | { type: 'leave'; workspaceId: number }
   | { type: 'heartbeat' }
-  | { type: 'message'; workspaceId: number; text: string };
+  | { type: 'message'; workspaceId: number; text: string }
+  | { type: 'document-join'; documentId: number }
+  | { type: 'document-leave'; documentId: number }
+  | { type: 'document-sync'; documentId: number; payload: Uint8Array }
+  | { type: 'document-awareness'; documentId: number; payload: Uint8Array };
 
 export type ServerMessage =
   | { type: 'presence'; workspaceId: number; users: PublicUser[] }
   | { type: 'message'; workspaceId: number; sender: PublicUser; text: string; sentAt: string }
   | { type: 'heartbeat' }
-  | { type: 'error'; code: ErrorCode; message: string; workspaceId?: number };
+  /** What the connection may do with a document; sent on joining and whenever it changes. */
+  | { type: 'document-access'; documentId: number; canEdit: boolean }
+  | { type: 'error'; code: ErrorCode; message: string; workspaceId?: number; documentId?: number };
 
 export type MessageType = ClientMessage['type'];
 
@@ -55,12 +66,22 @@ function hasKeys(record: Record<string, unknown>, keys: string[]) {
   return actual.length === keys.length && keys.every((key) => key in record);
 }
 
-function isWorkspaceId(value: unknown): value is number {
+function isId(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function parseBinaryFrame(raw: Uint8Array): ClientMessage | null {
+  if (raw.byteLength > MAX_BINARY_FRAME_BYTES) return null;
+  const frame = decodeFrame(raw);
+  if (!frame) return null;
+  return frame.kind === FrameKind.Sync
+    ? { type: 'document-sync', documentId: frame.documentId, payload: frame.payload }
+    : { type: 'document-awareness', documentId: frame.documentId, payload: frame.payload };
 }
 
 /** Returns the message, or null for anything that is not exactly a valid client message. */
 export function parseClientMessage(raw: unknown): ClientMessage | null {
+  if (raw instanceof Uint8Array) return parseBinaryFrame(raw);
   if (typeof raw !== 'string' || Buffer.byteLength(raw) > MAX_FRAME_BYTES) return null;
   let data: unknown;
   try {
@@ -74,16 +95,21 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return hasKeys(data, ['type']) ? { type: 'heartbeat' } : null;
     case 'join':
     case 'leave':
-      return hasKeys(data, ['type', 'workspaceId']) && isWorkspaceId(data.workspaceId)
+      return hasKeys(data, ['type', 'workspaceId']) && isId(data.workspaceId)
         ? { type: data.type, workspaceId: data.workspaceId }
         : null;
     case 'message':
       return hasKeys(data, ['type', 'workspaceId', 'text']) &&
-        isWorkspaceId(data.workspaceId) &&
+        isId(data.workspaceId) &&
         typeof data.text === 'string' &&
         data.text.trim().length > 0 &&
         data.text.length <= MAX_TEXT_LENGTH
         ? { type: 'message', workspaceId: data.workspaceId, text: data.text }
+        : null;
+    case 'document-join':
+    case 'document-leave':
+      return hasKeys(data, ['type', 'documentId']) && isId(data.documentId)
+        ? { type: data.type, documentId: data.documentId }
         : null;
     default:
       return null;
