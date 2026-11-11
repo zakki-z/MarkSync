@@ -4,6 +4,7 @@ import { AuthServiceAuthenticator } from '../src/connection-authenticator';
 import { CloseCode, ErrorCode, type ServerMessage } from '../src/protocol';
 import { startServer } from '../src/server';
 import { HttpWorkspaceAccessChecker } from '../src/workspace-access';
+import { documentFakes } from './support';
 
 const origin = 'http://localhost:8080';
 const WORKSPACE = 7;
@@ -44,6 +45,7 @@ const state = { now: 1_000_000 };
 function start() {
   const app = createApp({
     access: new HttpWorkspaceAccessChecker(upstream.url.origin, 1000),
+    ...documentFakes(),
     heartbeat: { intervalMs: 1000, maxMissed: 3 },
     clock: () => state.now,
   });

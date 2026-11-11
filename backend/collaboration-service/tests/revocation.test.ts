@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, jest, test } from 'bun:test';
 import { createApp } from '../src/app';
 import { CloseCode, ErrorCode } from '../src/protocol';
-import { connect, FakeAccess, join } from './support';
+import { connect, FakeAccess, join, documentFakes } from './support';
 
 const apps: ReturnType<typeof createApp>[] = [];
 function setup(access = new FakeAccess(), revalidateMs = 1000) {
-  const app = createApp({ access, revalidateMs });
+  const app = createApp({ access, ...documentFakes(), revalidateMs });
   apps.push(app);
   return { app, access };
 }

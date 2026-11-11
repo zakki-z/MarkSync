@@ -25,7 +25,7 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   const access = await authorizeWorkspace(request, context);
   if (access.error) return access.error;
-  const payload = await readDraft(request);
+  const payload = await readDraft(request, { markdownRequired: true });
   if ('error' in payload) return payload.error;
   return forwardToDocuments('POST', access.path, access.authorization, payload.draft);
 }

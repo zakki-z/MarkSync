@@ -36,11 +36,13 @@ test('forwards the bearer token and the draft for every authenticated document o
       if (url.endsWith('/auth/me')) return Response.json({ id: 7 });
       expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-token');
       const method = init?.method ?? 'GET';
-      calls.push(`${method} ${new URL(url).pathname}`);
+      calls.push(`${method} ${new URL(url).port}${new URL(url).pathname}`);
+      if (url.endsWith('/markdown')) return new Response('live text');
+      // Only a new document carries Markdown; updates never do.
       if (init?.body)
         expect(JSON.parse(String(init.body))).toEqual({
           title: 'Title',
-          markdown: 'Text',
+          ...(method === 'POST' && { markdown: 'Text' }),
           visibility: 'PUBLIC',
         });
       return method === 'DELETE' ? new Response(null, { status: 204 }) : Response.json({ id: 1 });
@@ -58,11 +60,12 @@ test('forwards the bearer token and the draft for every authenticated document o
     },
   );
   expect(calls).toEqual([
-    'GET /api/workspaces/5/documents',
-    'POST /api/workspaces/5/documents',
-    'GET /api/documents/1',
-    'PUT /api/documents/1',
-    'DELETE /api/documents/1',
+    'GET 8082/api/workspaces/5/documents',
+    'POST 8082/api/workspaces/5/documents',
+    'GET 8082/api/documents/1',
+    'GET 3001/documents/1/markdown',
+    'PUT 8082/api/documents/1',
+    'DELETE 8082/api/documents/1',
   ]);
 });
 
@@ -72,6 +75,7 @@ test('public reads work without a session and with an expired one', async () => 
     (url, init) => {
       if (url.endsWith('/auth/me')) return new Response(null, { status: 401 });
       seen.push(new Headers(init?.headers).get('Authorization'));
+      if (url.endsWith('/markdown')) return new Response('live text');
       return Response.json({ id: 1, visibility: 'PUBLIC', canEdit: false });
     },
     async () => {
@@ -79,7 +83,8 @@ test('public reads work without a session and with an expired one', async () => 
       expect((await read(request('GET', 'marksync_session=expired'), doc)).status).toBe(200);
     },
   );
-  expect(seen).toEqual([null, null]);
+  // Each read asks the Document Service and then the collaboration service, both anonymously.
+  expect(seen).toEqual([null, null, null, null]);
 });
 
 test('every write and list still requires a session', async () => {
@@ -153,4 +158,62 @@ test('preserves caller cancellation and times out even with a caller signal', as
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('a read returns the live text in place of the stored seed copy', async () => {
+  await withFetch(
+    (url) => {
+      if (url.endsWith('/markdown')) return new Response('# Live\n\nedited just now');
+      return Response.json({ id: 1, title: 'T', markdown: 'stale seed', canEdit: true });
+    },
+    async () => {
+      const response = await read(request('GET'), doc);
+      expect(await response.json()).toEqual({
+        id: 1,
+        title: 'T',
+        markdown: '# Live\n\nedited just now',
+        canEdit: true,
+      });
+    },
+  );
+});
+
+test('a read fails instead of showing stale text when the live text is unavailable', async () => {
+  for (const live of [() => new Response(null, { status: 503 }), () => Promise.reject(new Error())])
+    await withFetch(
+      (url) =>
+        url.endsWith('/markdown') ? live() : Response.json({ id: 1, markdown: 'stale seed' }),
+      async () => expect((await read(request('GET'), doc)).status).toBe(502),
+    );
+});
+
+test('a refused read never asks for the live text', async () => {
+  const asked: string[] = [];
+  await withFetch(
+    (url) => {
+      asked.push(url);
+      return new Response(null, { status: 403 });
+    },
+    async () => expect((await read(request('GET'), doc)).status).toBe(403),
+  );
+  expect(asked.filter((url) => url.endsWith('/markdown'))).toEqual([]);
+});
+
+test('an update may omit the Markdown, and a create must carry it', async () => {
+  await withFetch(
+    (url, init) => {
+      if (url.endsWith('/auth/me')) return Response.json({ id: 7 });
+      return Response.json(JSON.parse(String(init?.body)));
+    },
+    async () => {
+      const metadataOnly = await update(request('PUT', signedIn, { title: 'Only title' }), doc);
+      expect(await metadataOnly.json()).toEqual({ title: 'Only title' });
+      const ignored = await update(request('PUT', signedIn, { title: 'T', markdown: 'x' }), doc);
+      expect(await ignored.json()).toEqual({ title: 'T' });
+      expect(
+        (await createInWorkspace(request('POST', signedIn, { title: 'No body' }), workspace))
+          .status,
+      ).toBe(400);
+    },
+  );
 });

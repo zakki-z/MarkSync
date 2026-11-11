@@ -3,6 +3,7 @@ import {
   forwardToDocuments,
   isPositiveId,
   optionalAuthorization,
+  readDocument,
   readDraft,
 } from '@/src/server/documentsProxy';
 
@@ -21,7 +22,7 @@ export async function GET(request: Request, context: Context) {
   if (!path) return invalidId();
   const auth = await optionalAuthorization(request);
   if (auth.error) return auth.error;
-  return forwardToDocuments('GET', path, auth.authorization);
+  return readDocument(path, auth.authorization);
 }
 
 export async function PUT(request: Request, context: Context) {
@@ -29,7 +30,7 @@ export async function PUT(request: Request, context: Context) {
   if (!path) return invalidId();
   const auth = await authenticate(request);
   if ('error' in auth) return auth.error;
-  const payload = await readDraft(request);
+  const payload = await readDraft(request, { markdownRequired: false });
   if ('error' in payload) return payload.error;
   return forwardToDocuments('PUT', path, auth.authorization, payload.draft);
 }

@@ -17,37 +17,38 @@ async function signup(page: Page, email: string) {
   await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
   await expect(page.getByText('Signup successful! Please log in.')).toBeVisible();
 }
-async function rejectRoom(page: Page, workspaceId: number) {
+/** Joins a room or document the page may not enter and returns the error code it gets back. */
+async function rejectJoin(page: Page, join: { type: string } & Record<string, number | string>) {
   return page.evaluate(
-    (id) =>
+    (message) =>
       new Promise<string>((resolve, reject) => {
         const socket = new WebSocket(`ws://${location.host}/ws`);
+        socket.binaryType = 'arraybuffer';
         const timeout = setTimeout(() => {
           socket.close();
           reject(new Error('No authorization response'));
         }, 5000);
-        socket.onopen = () => socket.send(JSON.stringify({ type: 'join', workspaceId: id }));
+        socket.onopen = () => socket.send(JSON.stringify(message));
         socket.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          if (data.type === 'presence') {
-            clearTimeout(timeout);
-            socket.close();
-            reject(new Error('Unauthorized presence disclosed'));
-          }
-          if (data.type === 'error') {
-            clearTimeout(timeout);
-            socket.close();
-            resolve(data.code);
-          }
+          // Nothing but an error may come back: no presence, no document access, no Yjs state.
+          const data = typeof event.data === 'string' ? JSON.parse(event.data) : { type: 'binary' };
+          clearTimeout(timeout);
+          socket.close();
+          if (data.type === 'error') resolve(data.code);
+          else reject(new Error(`Unauthorized join disclosed ${data.type}`));
         };
         socket.onerror = () => {
           clearTimeout(timeout);
           reject(new Error('WebSocket upgrade failed'));
         };
       }),
-    workspaceId,
+    join,
   );
 }
+const rejectRoom = (page: Page, workspaceId: number) =>
+  rejectJoin(page, { type: 'join', workspaceId });
+const rejectDocument = (page: Page, documentId: number) =>
+  rejectJoin(page, { type: 'document-join', documentId });
 
 test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, logout', async ({
   page,
@@ -70,11 +71,23 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
   const documentUrl = page.url();
   const documentId = Number(documentUrl.split('/').pop());
   await page.getByLabel('Document title').fill('Walking skeleton');
-  await page
-    .getByLabel('Markdown content')
-    .fill(
-      '# Hello MarkSync\n\n**Saved** and *formatted*.\n\n<script>alert("unsafe")</script>\n\n[unsafe](javascript:alert)',
-    );
+  const editor = page.getByLabel('Markdown content');
+  await expect(editor).toHaveAttribute('contenteditable', 'true');
+  await editor.click();
+  const lines = [
+    '# Hello MarkSync',
+    '',
+    '**Saved** and *formatted*.',
+    '',
+    '<script>alert("unsafe")</script>',
+    '',
+    '[unsafe](javascript:alert)',
+  ];
+  for (const [index, line] of lines.entries()) {
+    if (index > 0) await page.keyboard.press('Enter');
+    if (line) await page.keyboard.type(line);
+  }
+  await expect(page.getByText('All changes synced')).toBeVisible();
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Document saved successfully.')).toBeVisible();
   await page.reload();
@@ -84,11 +97,17 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
   await expect(page.locator('.markdown-content strong')).toHaveText('Saved');
   await expect(page.locator('.markdown-content script, .markdown-content a')).toHaveCount(0);
   await page.getByRole('button', { name: 'Edit Markdown' }).click();
-  await page.getByLabel('Markdown content').fill('# Updated\n\nPersisted content');
-  await page.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByText('Document saved successfully.')).toBeVisible();
+  await expect(editor).toHaveAttribute('contenteditable', 'true');
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('# Updated');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Persisted content');
+  await expect(page.getByText('All changes synced')).toBeVisible();
+  // The text is live content, stored by the collaboration service: no save button is needed.
   await page.reload();
-  await expect(page.getByLabel('Markdown content')).toHaveValue('# Updated\n\nPersisted content');
+  await expect(editor).toContainText('Persisted content');
 
   const second = await browser.newContext({ baseURL });
   let outsider: BrowserContext | undefined;
@@ -124,6 +143,7 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
       (await outsider.request.delete(`/api/documents/${documentId}`, { headers })).status(),
     ).toBe(403);
     expect(await rejectRoom(outsiderPage, Number(workspaceId))).toBe('FORBIDDEN');
+    expect(await rejectDocument(outsiderPage, documentId)).toBe('FORBIDDEN');
     expect(await rejectRoom(page, 999999999)).toBe('FORBIDDEN');
     expect(
       (
@@ -142,7 +162,12 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
     try {
       const publicRead = await anonymous.request.get(`/api/documents/${documentId}`);
       expect(publicRead.status()).toBe(200);
-      expect(await publicRead.json()).toMatchObject({ visibility: 'PUBLIC', canEdit: false });
+      // The REST read returns the live text, not the stored seed copy.
+      expect(await publicRead.json()).toMatchObject({
+        visibility: 'PUBLIC',
+        canEdit: false,
+        markdown: '# Updated\n\nPersisted content',
+      });
       expect(
         (
           await anonymous.request.put(`/api/documents/${documentId}`, {

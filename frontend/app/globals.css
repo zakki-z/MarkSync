@@ -413,6 +413,27 @@ body {
 .markdown-editor::placeholder {
   color: #b2bbca;
 }
+.markdown-editor.cm-host {
+  padding: 0;
+  resize: none;
+}
+.cm-host .cm-editor {
+  min-height: 430px;
+  outline: none;
+}
+.cm-host .cm-scroller {
+  padding: 28px;
+  font-family: inherit;
+  line-height: inherit;
+}
+.cm-host .cm-content {
+  caret-color: #0070f3;
+}
+.status-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .markdown-preview {
   min-height: 430px;
   overflow-wrap: anywhere;
@@ -607,6 +628,9 @@ body {
     margin-bottom: 23px;
   }
   .markdown-editor {
+    padding: 17px;
+  }
+  .cm-host .cm-scroller {
     padding: 17px;
   }
   .markdown-preview {

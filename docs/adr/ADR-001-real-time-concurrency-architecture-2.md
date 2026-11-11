@@ -13,6 +13,8 @@ Presence authenticates upgrades, checks document ownership before joining, dedup
 
 **Update (2026-11-11):** the Task 1 presence described above, scoped to a document owner's rooms, was replaced by workspace-scoped presence with permission checks, revalidation and messaging; see [ADR-005](ADR-005-workspace-presence.md).
 
+**Update (2026-11-11, MS-05):** Yjs synchronization, CodeMirror 6 editing, awareness and MongoDB persistence are implemented as decided here, with two deliberate differences: the Document service no longer receives debounced Markdown (there is no Kafka producer; the collaboration service serves the live text over HTTP and the Yjs state is the only writable content after a document is first opened), and presence stays on its own JSON messages. See [ADR-006](ADR-006-collaborative-synchronization.md).
+
 The original decision format and AI prompt appendix below are preserved. This implementation update records repository behavior, not a new AI consultation or peer acceptance.
 
 ## Context

@@ -2,9 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { createApp } from '../src/app';
 import { InMemoryPresenceRegistry } from '../src/presence-registry';
 import { CloseCode, ErrorCode } from '../src/protocol';
-import { connect, FakeAccess, join, leave } from './support';
+import { connect, FakeAccess, join, leave, documentFakes } from './support';
 
-const setup = (access = new FakeAccess()) => ({ access, app: createApp({ access }) });
+const setup = (access = new FakeAccess()) => ({
+  access,
+  app: createApp({ access, ...documentFakes() }),
+});
 const ids = (users?: { id: number }[]) => users?.map((user) => user.id);
 
 describe('join and presence', () => {

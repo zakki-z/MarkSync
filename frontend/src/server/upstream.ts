@@ -7,6 +7,9 @@ export const documentBase = (process.env.DOCUMENT_SERVICE_URL ?? 'http://localho
   /\/$/,
   '',
 );
+export const collaborationBase = (
+  process.env.COLLABORATION_SERVICE_URL ?? 'http://localhost:3001'
+).replace(/\/$/, '');
 export const workspaceBase = (process.env.WORKSPACE_SERVICE_URL ?? 'http://localhost:8083').replace(
   /\/$/,
   '',

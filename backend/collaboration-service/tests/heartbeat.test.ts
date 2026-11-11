@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, jest, test } from 'bun:test';
 import { createApp } from '../src/app';
 import { CloseCode } from '../src/protocol';
-import { connect, FakeAccess, join } from './support';
+import { connect, FakeAccess, join, documentFakes } from './support';
 
 const heartbeat = JSON.stringify({ type: 'heartbeat' });
 const INTERVAL = 1000;
@@ -11,6 +11,7 @@ function setup(maxMissed = 3) {
   const state = { now: 10_000 };
   const app = createApp({
     access: new FakeAccess(),
+    ...documentFakes(),
     heartbeat: { intervalMs: INTERVAL, maxMissed },
     clock: () => state.now,
   });
@@ -97,6 +98,7 @@ describe('lifecycle with fake timers', () => {
     const state = { now: 0 };
     const app = createApp({
       access: new FakeAccess(),
+      ...documentFakes(),
       heartbeat: { intervalMs: INTERVAL, maxMissed: 2 },
       clock: () => state.now,
     });

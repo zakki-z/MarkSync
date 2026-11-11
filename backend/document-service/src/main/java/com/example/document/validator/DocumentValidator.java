@@ -8,6 +8,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class DocumentValidator {
     public void validateCreate(DocumentDTO dto) {
+        if (dto.getMarkdown() == null) {
+            throw new BadRequestException("Markdown content is required");
+        }
         if (dto.getId() != null || dto.getCreatedAt() != null || dto.getUpdatedAt() != null) {
             throw new BadRequestException("Document identifiers and timestamps are assigned by the server");
         }
