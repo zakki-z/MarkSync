@@ -42,8 +42,8 @@ class WorkspaceSchemaTests {
         return workspaces.saveAndFlush(new Workspace("Team notes", visibility, "1"));
     }
 
-    private WorkspaceInvitation newInvitation(Long workspaceId, String email, WorkspaceRole role, String hash) {
-        return new WorkspaceInvitation(workspaceId, email, role, hash, "1",
+    private WorkspaceInvitation newInvitation(Long workspaceId, String userId, WorkspaceRole role) {
+        return new WorkspaceInvitation(workspaceId, userId, null, role, "1",
                 Instant.now().plus(7, ChronoUnit.DAYS));
     }
 
@@ -100,34 +100,58 @@ class WorkspaceSchemaTests {
     void deletingWorkspaceCascadesToMembersAndInvitations() {
         Workspace workspace = newWorkspace(WorkspaceVisibility.PRIVATE);
         members.saveAndFlush(new WorkspaceMember(workspace.getId(), "1", WorkspaceRole.OWNER));
-        invitations.saveAndFlush(newInvitation(workspace.getId(), "a@example.com", WorkspaceRole.EDITOR, "h1"));
+        invitations.saveAndFlush(newInvitation(workspace.getId(), "2", WorkspaceRole.EDITOR));
 
         jdbc.update("DELETE FROM workspaces WHERE id = ?", workspace.getId());
 
         assertThat(members.findAllByWorkspaceId(workspace.getId())).isEmpty();
-        assertThat(invitations.findByTokenHash("h1")).isEmpty();
+        assertThat(invitations.count()).isZero();
     }
 
     @Test
-    void invitationDefaultsToPendingAndCanBeFoundByTokenHash() {
+    void invitationDefaultsToPendingAndCanBeFoundByWorkspaceUserAndStatus() {
         Workspace workspace = newWorkspace(WorkspaceVisibility.PRIVATE);
-        invitations.saveAndFlush(newInvitation(workspace.getId(), "a@example.com", WorkspaceRole.VIEWER, "h2"));
+        invitations.saveAndFlush(newInvitation(workspace.getId(), "2", WorkspaceRole.VIEWER));
 
-        WorkspaceInvitation found = invitations.findByTokenHash("h2").orElseThrow();
+        WorkspaceInvitation found = invitations.findByWorkspaceIdAndInvitedUserIdAndStatus(
+                workspace.getId(), "2", InvitationStatus.PENDING).orElseThrow();
 
         assertThat(found.getStatus()).isEqualTo(InvitationStatus.PENDING);
-        assertThat(invitations.existsByWorkspaceIdAndEmailAndStatus(
-                workspace.getId(), "a@example.com", InvitationStatus.PENDING)).isTrue();
+        assertThat(found.getCreatedAt()).isNotNull();
     }
 
     @Test
-    void rejectsDuplicateTokenHash() {
+    void rejectsASecondPendingInvitationForTheSameUserAndWorkspace() {
         Workspace workspace = newWorkspace(WorkspaceVisibility.PRIVATE);
-        invitations.saveAndFlush(newInvitation(workspace.getId(), "a@example.com", WorkspaceRole.VIEWER, "dup"));
+        invitations.saveAndFlush(newInvitation(workspace.getId(), "2", WorkspaceRole.VIEWER));
 
         assertThatThrownBy(() -> invitations.saveAndFlush(
-                newInvitation(workspace.getId(), "b@example.com", WorkspaceRole.VIEWER, "dup")))
+                newInvitation(workspace.getId(), "2", WorkspaceRole.EDITOR)))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void allowsManyClosedInvitationsAndANewPendingOneForTheSameUser() {
+        Workspace workspace = newWorkspace(WorkspaceVisibility.PRIVATE);
+        for (int i = 0; i < 3; i++) {
+            WorkspaceInvitation closed = invitations.saveAndFlush(
+                    newInvitation(workspace.getId(), "2", WorkspaceRole.VIEWER));
+            closed.decline();
+            invitations.saveAndFlush(closed);
+        }
+
+        invitations.saveAndFlush(newInvitation(workspace.getId(), "2", WorkspaceRole.VIEWER));
+        invitations.saveAndFlush(newInvitation(workspace.getId(), "3", WorkspaceRole.VIEWER));
+
+        assertThat(invitations.count()).isEqualTo(5);
+    }
+
+    @Test
+    void allowsPendingInvitationsForTheSameUserInDifferentWorkspaces() {
+        invitations.saveAndFlush(newInvitation(newWorkspace(WorkspaceVisibility.PRIVATE).getId(), "2", WorkspaceRole.VIEWER));
+        invitations.saveAndFlush(newInvitation(newWorkspace(WorkspaceVisibility.PRIVATE).getId(), "2", WorkspaceRole.VIEWER));
+
+        assertThat(invitations.count()).isEqualTo(2);
     }
 
     @Test
@@ -135,7 +159,19 @@ class WorkspaceSchemaTests {
         Workspace workspace = newWorkspace(WorkspaceVisibility.PRIVATE);
 
         assertThatThrownBy(() -> invitations.saveAndFlush(
-                newInvitation(workspace.getId(), "a@example.com", WorkspaceRole.OWNER, "owner-attempt")))
+                newInvitation(workspace.getId(), "2", WorkspaceRole.OWNER)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsAPendingMarkerThatDisagreesWithTheStatus() {
+        Workspace workspace = newWorkspace(WorkspaceVisibility.PRIVATE);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO workspace_invitations (workspace_id, invited_user_id, role, status, "
+                        + "invited_by, pending_marker, expires_at, created_at, updated_at) "
+                        + "VALUES (?, '2', 'VIEWER', 'REVOKED', '1', TRUE, CURRENT_TIMESTAMP, "
+                        + "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", workspace.getId()))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 }
