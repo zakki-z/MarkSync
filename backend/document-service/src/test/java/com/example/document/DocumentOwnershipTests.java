@@ -34,6 +34,8 @@ class DocumentOwnershipTests {
     @Value("${JWT_SECRET_KEY}")
     private String secret;
 
+    private static final String COLLECTION = "/api/workspaces/5/documents";
+
     @BeforeEach
     void clearDocuments() {
         repository.deleteAll();
@@ -42,15 +44,17 @@ class DocumentOwnershipTests {
     @Test
     void signedSubjectOwnsCreatedDocumentAndCanPerformCrudWithoutAuthorInBody() throws Exception {
         String owner = token("7", Instant.now().plusSeconds(600), secret);
-        String location = mvc.perform(post("/api/documents").header("Authorization", owner)
+        String location = mvc.perform(post(COLLECTION).header("Authorization", owner)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"title":"Original","markdown":"# Text","authorId":"8"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.authorId").value("7"))
+                .andExpect(jsonPath("$.workspaceId").value(5))
+                .andExpect(jsonPath("$.visibility").value("PRIVATE"))
                 .andReturn().getResponse().getHeader("Location");
-        mvc.perform(get("/api/documents").header("Authorization", owner))
+        mvc.perform(get(COLLECTION).header("Authorization", owner))
                 .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].authorId").value("7"));
         mvc.perform(get(location).header("Authorization", owner))
@@ -69,13 +73,13 @@ class DocumentOwnershipTests {
     void otherUserCannotListReadUpdateOrDeleteEvenWithOwnersAuthorId() throws Exception {
         String owner = token("7", Instant.now().plusSeconds(600), secret);
         String other = token("8", Instant.now().plusSeconds(600), secret);
-        String location = mvc.perform(post("/api/documents").header("Authorization", owner)
+        String location = mvc.perform(post(COLLECTION).header("Authorization", owner)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"title":"Private","markdown":"Secret"}
                                 """))
                 .andExpect(status().isCreated()).andReturn().getResponse().getHeader("Location");
-        mvc.perform(get("/api/documents").header("Authorization", other))
+        mvc.perform(get(COLLECTION).header("Authorization", other))
                 .andExpect(status().isOk()).andExpect(content().json("[]"));
         mvc.perform(get(location).header("Authorization", other)).andExpect(status().isNotFound());
         mvc.perform(put(location).header("Authorization", other).contentType(MediaType.APPLICATION_JSON)
@@ -90,10 +94,29 @@ class DocumentOwnershipTests {
     }
 
     @Test
+    void documentsAreListedPerWorkspaceAndCannotBeMoved() throws Exception {
+        String owner = token("7", Instant.now().plusSeconds(600), secret);
+        String location = mvc.perform(post(COLLECTION).header("Authorization", owner)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Scoped","markdown":"Text","visibility":"PUBLIC"}
+                                """))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.visibility").value("PUBLIC"))
+                .andReturn().getResponse().getHeader("Location");
+        mvc.perform(get("/api/workspaces/6/documents").header("Authorization", owner))
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
+        mvc.perform(put(location).header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Scoped","markdown":"Text","workspaceId":6}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void everyCrudEndpointRequiresAuthentication() throws Exception {
-        mvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
+        mvc.perform(get(COLLECTION)).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/documents/1")).andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/documents").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post(COLLECTION).contentType(MediaType.APPLICATION_JSON)
                 .content("{}")).andExpect(status().isUnauthorized());
         mvc.perform(put("/api/documents/1").contentType(MediaType.APPLICATION_JSON)
                 .content("{}")).andExpect(status().isUnauthorized());
@@ -109,7 +132,7 @@ class DocumentOwnershipTests {
                 token("student@example.com", Instant.now().plusSeconds(600), secret),
                 token("7", null, secret)
         }) {
-            mvc.perform(get("/api/documents").header("Authorization", invalid))
+            mvc.perform(get(COLLECTION).header("Authorization", invalid))
                     .andExpect(status().isUnauthorized());
         }
     }

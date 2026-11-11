@@ -24,8 +24,8 @@ public class DocumentDAO {
         return repository.saveAndFlush(document);
     }
 
-    public List<Document> findAllByAuthorId(String authorId) {
-        return repository.findAllByAuthorId(authorId, Sort.by(Sort.Direction.DESC, "updatedAt"));
+    public List<Document> findAllByWorkspaceIdAndAuthorId(Long workspaceId, String authorId) {
+        return repository.findAllByWorkspaceIdAndAuthorId(workspaceId, authorId, Sort.by(Sort.Direction.DESC, "updatedAt"));
     }
 
     public Optional<Document> findByIdAndAuthorId(Long id, String authorId) {

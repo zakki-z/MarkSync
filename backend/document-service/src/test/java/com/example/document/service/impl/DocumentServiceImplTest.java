@@ -54,10 +54,11 @@ class DocumentServiceImplTest {
         when(dao.save(entity)).thenReturn(saved);
         when(mapper.toDTO(saved)).thenReturn(output);
 
-        DocumentDTO result = service.create(input, "123");
+        DocumentDTO result = service.create(4L, input, "123");
 
         assertSame(output, result);
         assertEquals("123", input.getAuthorId());
+        assertEquals(4L, input.getWorkspaceId());
         verify(validator).validateCreate(input);
         verify(mapper).toEntity(input);
         verify(dao).save(entity);
@@ -70,7 +71,7 @@ class DocumentServiceImplTest {
         doThrow(new BadRequestException("Invalid document"))
                 .when(validator).validateCreate(input);
 
-        assertThrows(BadRequestException.class, () -> service.create(input, "123"));
+        assertThrows(BadRequestException.class, () -> service.create(4L, input, "123"));
 
         verifyNoInteractions(dao, mapper);
     }
@@ -82,23 +83,23 @@ class DocumentServiceImplTest {
         DocumentDTO firstDto = dto(1L, "First");
         DocumentDTO secondDto = dto(2L, "Second");
 
-        when(dao.findAllByAuthorId("123")).thenReturn(List.of(first, second));
+        when(dao.findAllByWorkspaceIdAndAuthorId(4L, "123")).thenReturn(List.of(first, second));
         when(mapper.toDTO(first)).thenReturn(firstDto);
         when(mapper.toDTO(second)).thenReturn(secondDto);
 
-        List<DocumentDTO> result = service.getAll("123");
+        List<DocumentDTO> result = service.getAll(4L, "123");
 
         assertEquals(List.of(firstDto, secondDto), result);
-        verify(dao).findAllByAuthorId("123");
+        verify(dao).findAllByWorkspaceIdAndAuthorId(4L, "123");
         verify(mapper).toDTO(first);
         verify(mapper).toDTO(second);
     }
 
     @Test
     void getAll_noDocuments_returnsEmptyList() {
-        when(dao.findAllByAuthorId("123")).thenReturn(List.of());
+        when(dao.findAllByWorkspaceIdAndAuthorId(4L, "123")).thenReturn(List.of());
 
-        List<DocumentDTO> result = service.getAll("123");
+        List<DocumentDTO> result = service.getAll(4L, "123");
 
         assertTrue(result.isEmpty());
         verifyNoInteractions(mapper, validator);

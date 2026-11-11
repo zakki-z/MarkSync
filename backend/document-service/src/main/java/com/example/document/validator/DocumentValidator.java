@@ -17,6 +17,9 @@ public class DocumentValidator {
         if (dto.getId() != null && !id.equals(dto.getId())) {
             throw new BadRequestException("Document ID in body must match URL");
         }
+        if (dto.getWorkspaceId() != null && !current.getWorkspaceId().equals(dto.getWorkspaceId())) {
+            throw new BadRequestException("Document cannot be moved to another workspace");
+        }
         if (dto.getAuthorId() != null && !current.getAuthorId().equals(dto.getAuthorId().trim())) {
             throw new BadRequestException("Document author cannot be changed");
         }

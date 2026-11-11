@@ -10,6 +10,6 @@ import java.util.Optional;
 
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, Long> {
-    List<Document> findAllByAuthorId(String authorId, Sort sort);
+    List<Document> findAllByWorkspaceIdAndAuthorId(Long workspaceId, String authorId, Sort sort);
     Optional<Document> findByIdAndAuthorId(Long id, String authorId);
 }

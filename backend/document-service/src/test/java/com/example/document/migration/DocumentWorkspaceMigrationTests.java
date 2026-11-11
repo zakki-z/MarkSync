@@ -57,6 +57,19 @@ class DocumentWorkspaceMigrationTests {
     }
 
     @Test
+    void enforcesWorkspaceAndDefaultsExistingDocumentsToPrivate() {
+        migrateTo("1");
+        seed("7", "A");
+
+        migrateTo("5");
+
+        assertThat(jdbc.queryForObject("SELECT visibility FROM documents", String.class)).isEqualTo("PRIVATE");
+        assertThatThrownBy(() -> seed("7", "No workspace")).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> jdbc.update("UPDATE documents SET visibility = 'SECRET'"))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
     void leavesAnEmptyDatabaseAloneAndNeverCallsTheWorkspaceService() {
         migrateTo("3");
 

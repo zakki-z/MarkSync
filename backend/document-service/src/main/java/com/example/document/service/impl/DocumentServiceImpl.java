@@ -27,15 +27,16 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional
-    public DocumentDTO create(DocumentDTO dto, String authorId) {
+    public DocumentDTO create(Long workspaceId, DocumentDTO dto, String authorId) {
         validator.validateCreate(dto);
         dto.setAuthorId(authorId);
+        dto.setWorkspaceId(workspaceId);
         return mapper.toDTO(dao.save(mapper.toEntity(dto)));
     }
 
     @Override
-    public List<DocumentDTO> getAll(String authorId) {
-        return dao.findAllByAuthorId(authorId).stream().map(mapper::toDTO).toList();
+    public List<DocumentDTO> getAll(Long workspaceId, String authorId) {
+        return dao.findAllByWorkspaceIdAndAuthorId(workspaceId, authorId).stream().map(mapper::toDTO).toList();
     }
 
     @Override
