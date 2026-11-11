@@ -1,8 +1,16 @@
+import { apiRequest } from './apiClient';
+
+export type DocumentVisibility = 'PRIVATE' | 'PUBLIC';
+
 export type DocumentDTO = {
   id: number;
+  workspaceId: number;
   title: string;
   authorId: string;
   markdown: string;
+  visibility: DocumentVisibility;
+  /** Decided by the API; the UI only reflects it. */
+  canEdit: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -10,54 +18,19 @@ export type DocumentDTO = {
 export type DocumentDraft = {
   title: string;
   markdown: string;
+  visibility?: DocumentVisibility;
 };
 
-export class DocumentApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
-    this.name = 'DocumentApiError';
-  }
-}
+export const listDocuments = (workspaceId: number) =>
+  apiRequest<DocumentDTO[]>(`/api/workspaces/${workspaceId}/documents`);
 
-async function documentRequest<T>(
-  path: string,
-  options: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; data?: DocumentDraft } = {},
-): Promise<T> {
-  const response = await fetch(`/api/documents${path}`, {
-    method: options.method ?? 'GET',
-    headers: {
-      ...(options.data ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: options.data ? JSON.stringify(options.data) : undefined,
-    cache: 'no-store',
-  });
+export const getDocument = (id: number) => apiRequest<DocumentDTO>(`/api/documents/${id}`);
 
-  if (!response.ok) {
-    const error: unknown = await response.json().catch(() => null);
-    const issue = error as { detail?: string; message?: string; title?: string } | null;
-    throw new DocumentApiError(
-      issue?.detail ??
-        issue?.message ??
-        issue?.title ??
-        `Document request failed (${response.status})`,
-      response.status,
-    );
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-}
-
-export const listDocuments = () => documentRequest<DocumentDTO[]>('');
-
-export const getDocument = (id: number) => documentRequest<DocumentDTO>(`/${id}`);
-
-export const createDocument = (data: DocumentDraft) =>
-  documentRequest<DocumentDTO>('', { method: 'POST', data });
+export const createDocument = (workspaceId: number, data: DocumentDraft) =>
+  apiRequest<DocumentDTO>(`/api/workspaces/${workspaceId}/documents`, { method: 'POST', data });
 
 export const updateDocument = (id: number, data: DocumentDraft) =>
-  documentRequest<DocumentDTO>(`/${id}`, { method: 'PUT', data });
+  apiRequest<DocumentDTO>(`/api/documents/${id}`, { method: 'PUT', data });
 
-export const deleteDocument = (id: number) => documentRequest<void>(`/${id}`, { method: 'DELETE' });
+export const deleteDocument = (id: number) =>
+  apiRequest<void>(`/api/documents/${id}`, { method: 'DELETE' });

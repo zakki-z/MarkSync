@@ -618,3 +618,32 @@ body {
   outline: 3px solid #2563eb;
   outline-offset: 3px;
 }
+
+.workspace.public-view {
+  grid-template-columns: minmax(0, 1fr);
+}
+.workspace-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.readonly-badge {
+  margin-left: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+.visibility-field {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #475569;
+}
+.workspace .document-item {
+  text-decoration: none;
+  color: inherit;
+}

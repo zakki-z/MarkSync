@@ -1,7 +1,21 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-test.beforeEach(async ({ context, page }) => {
-  await context.addCookies([
+const workspace = { id: 1, name: 'Personal', visibility: 'PRIVATE', ownerId: '7' };
+const document = (overrides: Record<string, unknown> = {}) => ({
+  id: 2,
+  workspaceId: 1,
+  title: 'Original',
+  markdown: '# Original content',
+  authorId: '7',
+  visibility: 'PRIVATE',
+  canEdit: true,
+  createdAt: '2026-10-27T19:00:00Z',
+  updatedAt: '2026-10-27T19:00:00Z',
+  ...overrides,
+});
+
+async function signIn(page: Page) {
+  await page.context().addCookies([
     {
       name: 'marksync_session',
       value: 'local-test-jwt',
@@ -10,124 +24,204 @@ test.beforeEach(async ({ context, page }) => {
     },
   ]);
   await page.route('**/api/auth/me', (route) =>
-    route.fulfill({
-      json: { id: 7, email: 'student@sussex.ac.uk', role: 'user' },
-    }),
+    route.fulfill({ json: { id: 7, email: 'student@sussex.ac.uk', role: 'user' } }),
   );
-});
+}
 
-test('creates, displays and previews a Markdown document', async ({ page }) => {
-  const documents: Array<Record<string, unknown>> = [];
-  await page.route('**/api/documents', async (route) => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({ json: documents });
-      return;
-    }
-    expect(route.request().postDataJSON()).toEqual({
-      title: 'First document',
-      markdown: '# Hello MarkSync\n\n**Saved**',
+test.describe('signed in', () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page);
+  });
+
+  test('opens the latest workspace from /documents', async ({ page }) => {
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [] }));
+    await page.goto('/documents');
+    await expect(page).toHaveURL('/w/1');
+    await expect(page.getByText('No documents yet. Create your first one.')).toBeVisible();
+  });
+
+  test('creates a personal workspace when the user has none', async ({ page }) => {
+    await page.route('**/api/workspaces', async (route) => {
+      if (route.request().method() === 'POST') {
+        expect(route.request().postDataJSON()).toEqual({ name: 'Personal' });
+        await route.fulfill({ status: 201, json: workspace });
+      } else {
+        await route.fulfill({ json: [] });
+      }
     });
-    const saved = {
-      id: 1,
-      title: 'First document',
-      markdown: '# Hello MarkSync\n\n**Saved**',
-      authorId: '7',
-      createdAt: '2026-10-27T19:00:00Z',
-      updatedAt: '2026-10-27T19:00:00Z',
-    };
-    documents.push(saved);
-    await route.fulfill({ status: 201, json: saved });
+    await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [] }));
+    await page.goto('/documents');
+    await expect(page).toHaveURL('/w/1');
   });
 
-  await page.goto('/documents');
-  await expect(page.getByText('No documents yet. Create your first one.')).toBeVisible();
-  await page.getByLabel('Document title').fill('First document');
-  await page.getByLabel('Markdown content').fill('# Hello MarkSync\n\n**Saved**');
-  await page.getByRole('button', { name: 'Create document' }).click();
-  await expect(page.getByText('Document saved successfully.')).toBeVisible();
-  await page.getByRole('button', { name: 'Preview' }).click();
-  await expect(page.locator('.markdown-content h1')).toHaveText('Hello MarkSync');
-  await expect(page.locator('.markdown-content strong')).toHaveText('Saved');
-});
-
-test('edits and deletes a saved document', async ({ page }) => {
-  let saved = {
-    id: 2,
-    title: 'Original',
-    markdown: 'Original content',
-    authorId: '7',
-    createdAt: '2026-10-27T19:00:00Z',
-    updatedAt: '2026-10-27T19:00:00Z',
-  };
-  await page.route('**/api/documents', (route) => route.fulfill({ json: [saved] }));
-  await page.route('**/api/documents/2', async (route) => {
-    if (route.request().method() === 'PUT') {
-      saved = { ...saved, ...route.request().postDataJSON() };
-      await route.fulfill({ json: saved });
-    } else if (route.request().method() === 'DELETE') {
-      await route.fulfill({ status: 204, body: '' });
-    } else {
-      await route.fulfill({ json: saved });
-    }
+  test('dashboard lists documents, filters them and creates a new one', async ({ page }) => {
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/workspaces/1/documents', async (route) => {
+      if (route.request().method() === 'POST') {
+        expect(route.request().postDataJSON()).toEqual({
+          title: 'Untitled document',
+          markdown: '',
+        });
+        await route.fulfill({ status: 201, json: document({ id: 9, title: 'Untitled document' }) });
+      } else {
+        await route.fulfill({
+          json: [document(), document({ id: 3, title: 'Roadmap', visibility: 'PUBLIC' })],
+        });
+      }
+    });
+    await page.route('**/api/documents/9', (route) =>
+      route.fulfill({ json: document({ id: 9, title: 'Untitled document' }) }),
+    );
+    await page.goto('/w/1');
+    await expect(page.getByRole('link', { name: /Original/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Roadmap.*Public/ })).toBeVisible();
+    await page.getByPlaceholder('Search documents…').fill('road');
+    await expect(page.getByRole('link', { name: /Original/ })).toHaveCount(0);
+    await page.getByRole('button', { name: '+ New document' }).click();
+    await expect(page).toHaveURL('/w/1/d/9');
+    await expect(page.getByLabel('Document title')).toHaveValue('Untitled document');
   });
-  await page.goto('/documents');
-  await expect(page.getByLabel('Document title')).toHaveValue('Original');
-  await page.getByLabel('Document title').fill('Edited');
-  await page.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByText('Document saved successfully.')).toBeVisible();
-  expect(saved.title).toBe('Edited');
-  page.on('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.getByText('Document deleted.')).toBeVisible();
-});
 
-for (const operation of ['save', 'delete'] as const) {
-  test(`blocks switching and creating documents during ${operation}`, async ({ page }) => {
-    const documents = [1, 2].map((id) => ({
-      id,
-      title: `Document ${id}`,
-      markdown: 'Content',
-      authorId: '7',
-      createdAt: '2026-10-27T19:00:00Z',
-      updatedAt: '2026-10-27T19:00:00Z',
-    }));
+  test('workspace switcher navigates between workspaces', async ({ page }) => {
+    await page.route('**/api/workspaces', (route) =>
+      route.fulfill({ json: [workspace, { ...workspace, id: 4, name: 'Team' }] }),
+    );
+    await page.route('**/api/workspaces/*/documents', (route) => route.fulfill({ json: [] }));
+    await page.goto('/w/1');
+    await page.getByLabel('Workspace').selectOption({ label: 'Team' });
+    await expect(page).toHaveURL('/w/4');
+  });
+
+  test('shows the API error when creating a document is forbidden', async ({ page }) => {
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/workspaces/1/documents', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({ status: 403, json: { detail: 'Access denied' } });
+      } else {
+        await route.fulfill({ json: [] });
+      }
+    });
+    await page.goto('/w/1');
+    await page.getByRole('button', { name: '+ New document' }).click();
+    await expect(page.locator('.alert.error')).toContainText('Access denied');
+  });
+
+  test('edits, previews and deletes a document the user can edit', async ({ page }) => {
+    let saved = document();
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [saved] }));
+    await page.route('**/api/documents/2', async (route) => {
+      const method = route.request().method();
+      if (method === 'PUT') {
+        saved = { ...saved, ...route.request().postDataJSON() };
+        await route.fulfill({ json: saved });
+      } else if (method === 'DELETE') {
+        await route.fulfill({ status: 204, body: '' });
+      } else {
+        await route.fulfill({ json: saved });
+      }
+    });
+    await page.goto('/w/1/d/2');
+    await expect(page.getByLabel('Document title')).toHaveValue('Original');
+    await page.getByLabel('Document title').fill('Edited');
+    await page.getByLabel('Visibility').selectOption('PUBLIC');
+    await page.getByLabel('Markdown content').fill('# Hello MarkSync\n\n**Saved**');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Document saved successfully.')).toBeVisible();
+    expect(saved).toMatchObject({ title: 'Edited', visibility: 'PUBLIC' });
+    await page.getByRole('button', { name: 'Preview' }).click();
+    await expect(page.locator('.markdown-content h1')).toHaveText('Hello MarkSync');
+    await expect(page.locator('.markdown-content strong')).toHaveText('Saved');
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(page).toHaveURL('/w/1');
+  });
+
+  test('disables editing controls while a save is in flight', async ({ page }) => {
     let release!: () => void;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
     });
-    await page.route('**/api/documents', (route) => route.fulfill({ json: documents }));
-    await page.route('**/api/documents/1', async (route) => {
-      await pending;
-      await route.fulfill(
-        operation === 'delete'
-          ? { status: 204, body: '' }
-          : { json: { ...documents[0], ...route.request().postDataJSON() } },
-      );
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/documents/2', async (route) => {
+      if (route.request().method() === 'PUT') {
+        await pending;
+        await route.fulfill({ json: document({ title: 'Edited' }) });
+      } else {
+        await route.fulfill({ json: document() });
+      }
     });
-    await page.goto('/documents');
-    await expect(page.getByLabel('Document title')).toHaveValue('Document 1');
-    if (operation === 'save') {
-      await page.getByLabel('Document title').fill('Edited');
-      await page.getByRole('button', { name: 'Save changes' }).click();
-    } else {
-      page.on('dialog', (dialog) => dialog.accept());
-      await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    }
+    await page.goto('/w/1/d/2');
+    await page.getByLabel('Document title').fill('Edited');
+    await page.getByRole('button', { name: 'Save changes' }).click();
     try {
-      await expect(
-        page.getByRole('button', { name: '+ New document', exact: true }),
-      ).toBeDisabled();
-      await expect(page.getByRole('button', { name: /Document 2/ })).toBeDisabled();
-      await expect(page.getByLabel('Document title')).toHaveValue(
-        operation === 'save' ? 'Edited' : 'Document 1',
-      );
+      await expect(page.getByLabel('Document title')).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
     } finally {
       release();
     }
-    await expect(
-      page.getByText(operation === 'save' ? 'Document saved successfully.' : 'Document deleted.'),
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: '+ New document', exact: true })).toBeEnabled();
-    await expect(page.getByRole('button', { name: /Document 2/ })).toBeEnabled();
+    await expect(page.getByText('Document saved successfully.')).toBeVisible();
   });
-}
+
+  test('is read-only when the API says the user cannot edit', async ({ page }) => {
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/documents/2', (route) =>
+      route.fulfill({ json: document({ canEdit: false, markdown: '# Viewer copy' }) }),
+    );
+    await page.goto('/w/1/d/2');
+    await expect(page.getByText('Read-only')).toBeVisible();
+    await expect(page.locator('.markdown-content h1')).toHaveText('Viewer copy');
+    await expect(page.getByLabel('Markdown content')).toHaveCount(0);
+    await expect(page.getByLabel('Document title')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+  });
+
+  test('explains when the user has no access to a document', async ({ page }) => {
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/documents/2', (route) =>
+      route.fulfill({ status: 403, json: { detail: 'Access denied' } }),
+    );
+    await page.goto('/w/1/d/2');
+    await expect(page.getByText('You do not have access to this document.')).toBeVisible();
+  });
+});
+
+test.describe('anonymous visitor', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({ status: 401, json: { detail: 'Not signed in' } }),
+    );
+  });
+
+  test('reads a public document without edit controls', async ({ page }) => {
+    await page.route('**/api/documents/2', (route) =>
+      route.fulfill({
+        json: document({ visibility: 'PUBLIC', canEdit: false, markdown: '# Shared **notes**' }),
+      }),
+    );
+    await page.goto('/w/1/d/2');
+    await expect(page).toHaveURL('/w/1/d/2');
+    await expect(page.getByText('Read-only')).toBeVisible();
+    await expect(page.locator('.markdown-content h1')).toContainText('Shared');
+    await expect(page.getByLabel('Markdown content')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Online Users' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  });
+
+  test('asks to sign in for a private document', async ({ page }) => {
+    await page.route('**/api/documents/2', (route) =>
+      route.fulfill({ status: 401, json: { detail: 'Unauthorized' } }),
+    );
+    await page.goto('/w/1/d/2');
+    await expect(page.getByText('This document is private. Sign in to view it.')).toBeVisible();
+  });
+
+  test('the workspace dashboard still requires a session', async ({ request }) => {
+    const response = await request.get('/w/1', { maxRedirects: 0 });
+    expect(response.status()).toBe(307);
+    expect(response.headers().location).toContain('/auth');
+  });
+});

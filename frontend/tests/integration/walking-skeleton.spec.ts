@@ -7,7 +7,7 @@ async function login(page: Page, email: string) {
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Login', exact: true }).click();
-  await expect(page).toHaveURL('/documents');
+  await expect(page).toHaveURL(/\/w\/\d+$/);
 }
 async function signup(page: Page, email: string) {
   await page.goto('/auth');
@@ -64,18 +64,18 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
   expect(cookie?.sameSite).toBe('Lax');
   expect(await page.evaluate(() => document.cookie)).not.toContain('marksync_session');
   expect(await page.evaluate(() => sessionStorage.length)).toBe(0);
+  const workspaceId = new URL(page.url()).pathname.split('/')[2];
+  await page.getByRole('button', { name: '+ New document' }).click();
+  await expect(page).toHaveURL(/\/w\/\d+\/d\/\d+$/);
+  const documentUrl = page.url();
+  const documentId = Number(documentUrl.split('/').pop());
   await page.getByLabel('Document title').fill('Walking skeleton');
   await page
     .getByLabel('Markdown content')
     .fill(
       '# Hello MarkSync\n\n**Saved** and *formatted*.\n\n<script>alert("unsafe")</script>\n\n[unsafe](javascript:alert)',
     );
-  const created = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/documents') && response.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Create document' }).click();
-  const savedDocument = (await (await created).json()) as { id: number };
+  await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Document saved successfully.')).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Document title')).toHaveValue('Walking skeleton');
@@ -96,15 +96,13 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
     const secondPage = await second.newPage();
     await login(secondPage, email);
     const presence = page.getByRole('region', { name: 'Online Users' });
+    await expect(presence).toContainText('1 active session');
+    await secondPage.getByRole('link', { name: /Walking skeleton/ }).click();
     await expect(presence).toContainText('2 active sessions');
     await expect(secondPage.getByRole('region', { name: 'Online Users' })).toContainText(
       '2 active sessions',
     );
     await expect(presence.getByRole('listitem')).toHaveCount(1);
-    await secondPage.getByRole('button', { name: '+ New document', exact: true }).click();
-    await expect(presence).toContainText('1 active session');
-    await secondPage.getByRole('button', { name: /Walking skeleton/ }).click();
-    await expect(presence).toContainText('2 active sessions');
     await second.close();
     await expect(presence).toContainText('1 active session');
 
@@ -114,37 +112,62 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
     await signup(outsiderPage, outsiderEmail);
     await login(outsiderPage, outsiderEmail);
     const headers = { Origin: baseURL! };
-    expect((await outsider.request.get(`/api/documents/${savedDocument.id}`)).status()).toBe(404);
+    expect((await outsider.request.get(`/api/documents/${documentId}`)).status()).toBe(403);
     expect(
       (
-        await outsider.request.put(`/api/documents/${savedDocument.id}`, {
+        await outsider.request.put(`/api/documents/${documentId}`, {
           headers,
           data: { title: 'Stolen', markdown: 'Bad' },
         })
       ).status(),
-    ).toBe(404);
+    ).toBe(403);
     expect(
-      (await outsider.request.delete(`/api/documents/${savedDocument.id}`, { headers })).status(),
-    ).toBe(404);
-    expect(await rejectRoom(outsiderPage, savedDocument.id)).toBe('DOCUMENT_UNAVAILABLE');
+      (await outsider.request.delete(`/api/documents/${documentId}`, { headers })).status(),
+    ).toBe(403);
+    expect(await rejectRoom(outsiderPage, documentId)).toBe('DOCUMENT_UNAVAILABLE');
     expect(await rejectRoom(page, 999999999)).toBe('DOCUMENT_UNAVAILABLE');
     expect(
       (
-        await page.request.post('/api/documents', {
+        await page.request.post(`/api/workspaces/${workspaceId}/documents`, {
           headers: { Origin: 'https://evil.example' },
           data: { title: 'CSRF', markdown: '' },
         })
       ).status(),
     ).toBe(403);
 
+    // Public documents are readable anonymously but never writable.
+    await page.getByLabel('Visibility').selectOption('PUBLIC');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Document saved successfully.')).toBeVisible();
+    const anonymous = await browser.newContext({ baseURL });
+    try {
+      const publicRead = await anonymous.request.get(`/api/documents/${documentId}`);
+      expect(publicRead.status()).toBe(200);
+      expect(await publicRead.json()).toMatchObject({ visibility: 'PUBLIC', canEdit: false });
+      expect(
+        (
+          await anonymous.request.put(`/api/documents/${documentId}`, {
+            headers,
+            data: { title: 'Defaced', markdown: 'Bad' },
+          })
+        ).status(),
+      ).toBe(401);
+      const anonymousPage = await anonymous.newPage();
+      await anonymousPage.goto(documentUrl);
+      await expect(anonymousPage.getByText('Read-only')).toBeVisible();
+      await expect(anonymousPage.getByLabel('Markdown content')).toHaveCount(0);
+    } finally {
+      await anonymous.close();
+    }
+
     page.on('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(page.getByText('Document deleted.')).toBeVisible();
+    await expect(page).toHaveURL(`/w/${workspaceId}`);
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL('/auth');
     await page.goto('/documents');
     await expect(page).toHaveURL('/auth');
-    expect((await page.request.get('/api/documents')).status()).toBe(401);
+    expect((await page.request.get(`/api/workspaces/${workspaceId}/documents`)).status()).toBe(401);
   } finally {
     await second.close();
     await outsider?.close();

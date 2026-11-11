@@ -2,7 +2,6 @@ import { forbidden, mutationAllowed, sessionToken, unauthorized } from './sessio
 import { authBase, documentBase, fetchUpstream, relay, serviceUnavailable } from './upstream';
 
 type AuthUser = { id: number; email: string; role: string };
-type StoredDocument = { id: number; authorId: string; title: string; markdown: string };
 
 type AuthResult = { user: AuthUser; authorization: string } | { error: Response };
 
@@ -29,38 +28,26 @@ export async function authenticate(request: Request): Promise<AuthResult> {
   }
 }
 
-export async function readDocument(id: string, authorization: string): Promise<Response> {
-  try {
-    return await fetchUpstream(`${documentBase}/api/documents/${encodeURIComponent(id)}`, {
-      headers: { Authorization: authorization },
-    });
-  } catch {
-    return serviceUnavailable('Document Service');
-  }
+/**
+ * Public reads accept anonymous visitors. A missing or expired session reads as anonymous, so a
+ * stale cookie does not hide a public document.
+ */
+export async function optionalAuthorization(
+  request: Request,
+): Promise<
+  { authorization?: string; error?: undefined } | { authorization?: undefined; error: Response }
+> {
+  if (!sessionToken(request)) return {};
+  const auth = await authenticate(request);
+  if ('error' in auth) return auth.error.status === 401 ? {} : { error: auth.error };
+  return { authorization: auth.authorization };
 }
 
-export async function checkOwnership(
-  id: string,
-  user: AuthUser,
-  authorization: string,
-): Promise<{ document: StoredDocument } | { error: Response }> {
-  try {
-    const response = await readDocument(id, authorization);
-    if (!response.ok) return { error: await relay(response) };
-    const document = (await response.json()) as StoredDocument;
-    // Defense in depth; the Document Service enforces ownership using the JWT subject.
-    if (document.authorId !== String(user.id)) {
-      return { error: Response.json({ detail: 'Document not found.' }, { status: 404 }) };
-    }
-    return { document };
-  } catch {
-    return { error: serviceUnavailable('Document Service') };
-  }
-}
+export type DocumentDraft = { title: string; markdown: string; visibility?: 'PRIVATE' | 'PUBLIC' };
 
 export async function readDraft(
   request: Request,
-): Promise<{ draft: { title: string; markdown: string } } | { error: Response }> {
+): Promise<{ draft: DocumentDraft } | { error: Response }> {
   try {
     const body: unknown = await request.json();
     if (!body || typeof body !== 'object') throw new Error('Invalid body');
@@ -81,7 +68,22 @@ export async function readDraft(
         ),
       };
     }
-    return { draft: { title: raw.title.trim(), markdown: raw.markdown } };
+    if (
+      raw.visibility !== undefined &&
+      raw.visibility !== 'PRIVATE' &&
+      raw.visibility !== 'PUBLIC'
+    ) {
+      return {
+        error: Response.json({ detail: 'Visibility must be PRIVATE or PUBLIC.' }, { status: 400 }),
+      };
+    }
+    return {
+      draft: {
+        title: raw.title.trim(),
+        markdown: raw.markdown,
+        ...(raw.visibility && { visibility: raw.visibility }),
+      },
+    };
   } catch {
     return {
       error: Response.json({ detail: 'Request body must be valid JSON.' }, { status: 400 }),
@@ -89,19 +91,24 @@ export async function readDraft(
   }
 }
 
-export async function writeDocument(
+/** Relays a call to the Document Service, which enforces access with the caller's JWT. */
+export async function forwardToDocuments(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
-  method: 'POST' | 'PUT',
-  authorization: string,
-  draft: { title: string; markdown: string },
+  authorization?: string,
+  draft?: DocumentDraft,
 ): Promise<Response> {
   try {
-    const response = await fetchUpstream(`${documentBase}${path}`, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: authorization },
-      body: JSON.stringify(draft),
-    });
-    return relay(response);
+    return await relay(
+      await fetchUpstream(`${documentBase}${path}`, {
+        method,
+        headers: {
+          ...(authorization && { Authorization: authorization }),
+          ...(draft && { 'Content-Type': 'application/json' }),
+        },
+        ...(draft && { body: JSON.stringify(draft) }),
+      }),
+    );
   } catch {
     return serviceUnavailable('Document Service');
   }
