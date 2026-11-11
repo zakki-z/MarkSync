@@ -7,6 +7,10 @@ export const documentBase = (process.env.DOCUMENT_SERVICE_URL ?? 'http://localho
   /\/$/,
   '',
 );
+export const workspaceBase = (process.env.WORKSPACE_SERVICE_URL ?? 'http://localhost:8083').replace(
+  /\/$/,
+  '',
+);
 
 export async function fetchUpstream(url: string, init?: RequestInit): Promise<Response> {
   const timeout = AbortSignal.timeout(10_000);
