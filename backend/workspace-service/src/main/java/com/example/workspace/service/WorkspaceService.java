@@ -55,7 +55,7 @@ public class WorkspaceService {
 
     public MembershipResponse membership(Long id, String userId) {
         return members.findByWorkspaceIdAndUserId(id, userId)
-                .map(member -> new MembershipResponse(member.getRole()))
+                .map(member -> MembershipResponse.of(member.getRole()))
                 .orElseThrow(() -> notFound(id));
     }
 
@@ -88,8 +88,11 @@ public class WorkspaceService {
 
     private Workspace findOwned(Long id, String userId) {
         Workspace workspace = findVisible(id, userId);
-        if (!workspace.getOwnerId().equals(userId)) {
-            throw new ForbiddenException("Only the workspace owner can do this");
+        boolean allowed = members.findByWorkspaceIdAndUserId(id, userId)
+                .filter(member -> member.getRole().canManageWorkspace())
+                .isPresent();
+        if (!allowed) {
+            throw new ForbiddenException("Only a workspace owner can do this");
         }
         return workspace;
     }

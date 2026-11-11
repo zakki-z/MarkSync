@@ -87,3 +87,35 @@ test('invalid API sessions are rejected and their browser cookie expires', async
     globalThis.fetch = original;
   }
 });
+
+test('signup forwards an optional username and relays only known conflict messages', async () => {
+  const original = globalThis.fetch;
+  const sent: unknown[] = [];
+  let reply: Response = Response.json({ id: 1 }, { status: 201 });
+  globalThis.fetch = async (_url, init) => {
+    sent.push(JSON.parse(String(init?.body)));
+    return reply;
+  };
+  try {
+    const credentials = { email: 'a@example.com', password: 'password123' };
+    expect((await POST(request(credentials), context('signup'))).status).toBe(201);
+    expect(
+      (await POST(request({ ...credentials, username: ' amber ' }), context('signup'))).status,
+    ).toBe(201);
+    expect(sent).toEqual([credentials, { ...credentials, username: 'amber' }]);
+
+    reply = Response.json({ detail: 'Username already taken' }, { status: 400 });
+    const taken = await POST(request({ ...credentials, username: 'amber' }), context('signup'));
+    expect(taken.status).toBe(400);
+    expect(await taken.json()).toEqual({ detail: 'Username already taken' });
+
+    reply = Response.json({ detail: 'select * from users' }, { status: 400 });
+    const unknown = await POST(request(credentials), context('signup'));
+    expect(await unknown.json()).toEqual({ detail: 'Email already registered' });
+
+    const invalid = await POST(request({ ...credentials, username: 42 }), context('signup'));
+    expect(invalid.status).toBe(400);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

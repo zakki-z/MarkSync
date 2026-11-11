@@ -18,4 +18,12 @@ export async function proxy(request: NextRequest) {
 
 // The workspace dashboard needs a session. Document pages (/w/:id/d/:id) stay open so that public
 // documents can be read anonymously; the Document Service decides what each visitor may see.
-export const config = { matcher: ['/documents/:path*', '/w/:workspaceId'] };
+export const config = {
+  matcher: [
+    '/documents/:path*',
+    '/invitations',
+    '/w/:workspaceId',
+    '/w/:workspaceId/members',
+    '/w/:workspaceId/invitations',
+  ],
+};

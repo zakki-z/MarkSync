@@ -3,11 +3,12 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,13 +18,23 @@ from app.auth import (
     get_password_hash,
     verify_password,
 )
-from app.database import Base, User, engine, get_db
+from app.database import (
+    USERNAME_MAX,
+    USERNAME_MIN,
+    Base,
+    User,
+    derive_username,
+    engine,
+    get_db,
+    upgrade_schema,
+)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Create missing authentication tables on startup."""
     Base.metadata.create_all(bind=engine)
+    upgrade_schema()
     yield
 
 
@@ -50,13 +61,20 @@ async def validation_error(
     _request: Request, _error: RequestValidationError
 ) -> JSONResponse:
     return JSONResponse(
-        status_code=422, content={"detail": "Invalid email or password length"}
+        status_code=422,
+        content={"detail": "Invalid email, username or password length"},
     )
 
 
 class UserSignupRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    username: str | None = Field(
+        default=None,
+        min_length=USERNAME_MIN,
+        max_length=USERNAME_MAX,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+    )
 
 
 class UserLoginRequest(BaseModel):
@@ -67,7 +85,16 @@ class UserLoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
+    username: str
     role: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserSummary(BaseModel):
+    """The minimal public view of an account: no email, so lookups reveal nothing more."""
+
+    id: int
+    username: str
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -93,8 +120,19 @@ def signup(user_in: UserSignupRequest, db: Annotated[Session, Depends(get_db)]) 
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
         )
+    if user_in.username is not None:
+        username = user_in.username.lower()
+        if db.query(User).filter(User.username == username).first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken",
+            )
+    else:
+        taken = set(db.scalars(select(User.username)))
+        username = derive_username(user_in.email, taken)
     new_user = User(
         email=user_in.email,
+        username=username,
         hashed_password=get_password_hash(user_in.password),
         role="user",
     )
@@ -103,7 +141,9 @@ def signup(user_in: UserSignupRequest, db: Annotated[Session, Depends(get_db)]) 
         db.commit()
     except IntegrityError as err:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Email already registered") from err
+        raise HTTPException(
+            status_code=400, detail="Email or username already registered"
+        ) from err
     db.refresh(new_user)
     return new_user
 
@@ -148,3 +188,34 @@ def get_me(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
     return user
+
+
+@app.get("/auth/users/lookup", response_model=UserSummary)
+def lookup_user(
+    q: Annotated[str, Query(min_length=1, max_length=254)],
+    _payload: Annotated[dict[str, Any], Depends(decode_access_token)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    """Find an account by exact username or email; requires a valid token.
+
+    Usernames cannot contain "@", so the form of the query decides which field matches.
+    The response never includes the email, and nothing is returned for partial matches.
+    """
+    query = q.strip().lower()
+    column = User.email if "@" in query else User.username
+    user = db.query(User).filter(func.lower(column) == query).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    return user
+
+
+@app.get("/auth/users", response_model=list[UserSummary])
+def get_users(
+    ids: Annotated[list[int], Query(max_length=100)],
+    _payload: Annotated[dict[str, Any], Depends(decode_access_token)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[User]:
+    """Resolve known user ids to usernames, so other services never copy profiles."""
+    return db.query(User).filter(User.id.in_(ids)).order_by(User.id).all()

@@ -1,5 +1,7 @@
 package com.example.workspace.entity;
 
+import com.example.workspace.exception.InvalidInvitationTransitionException;
+import com.example.workspace.exception.InvitationExpiredException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,6 +15,11 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 
+/**
+ * An offer of membership to one user. It starts PENDING and leaves that state exactly once, through
+ * {@link #accept}, {@link #decline} or {@link #revoke}; any other transition is rejected here.
+ * Who may trigger a transition is decided by the service layer.
+ */
 @Entity
 @Table(name = "workspace_invitations")
 public class WorkspaceInvitation {
@@ -23,16 +30,17 @@ public class WorkspaceInvitation {
     @Column(name = "workspace_id", nullable = false, updatable = false)
     private Long workspaceId;
 
-    @Column(nullable = false, length = 254, updatable = false)
-    private String email;
+    @Column(name = "invited_user_id", nullable = false, length = 120, updatable = false)
+    private String invitedUserId;
+
+    /** The address the inviter typed, kept for display only; null when they invited by username. */
+    @Column(name = "invited_email", length = 254, updatable = false)
+    private String invitedEmail;
 
     /** EDITOR or VIEWER only; ownership cannot be granted by invitation. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10, updatable = false)
     private WorkspaceRole role;
-
-    @Column(name = "token_hash", nullable = false, length = 64, updatable = false)
-    private String tokenHash;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
@@ -40,6 +48,14 @@ public class WorkspaceInvitation {
 
     @Column(name = "invited_by", nullable = false, length = 120, updatable = false)
     private String invitedBy;
+
+    /**
+     * True while PENDING and null afterwards. A unique constraint over (workspace, user, marker)
+     * therefore allows one pending invitation and any number of closed ones, without a partial
+     * index (which the H2 test database lacks).
+     */
+    @Column(name = "pending_marker")
+    private Boolean pendingMarker = Boolean.TRUE;
 
     @Column(name = "expires_at", nullable = false, updatable = false)
     private Instant expiresAt;
@@ -53,12 +69,12 @@ public class WorkspaceInvitation {
     protected WorkspaceInvitation() {
     }
 
-    public WorkspaceInvitation(Long workspaceId, String email, WorkspaceRole role,
-                               String tokenHash, String invitedBy, Instant expiresAt) {
+    public WorkspaceInvitation(Long workspaceId, String invitedUserId, String invitedEmail,
+                               WorkspaceRole role, String invitedBy, Instant expiresAt) {
         this.workspaceId = workspaceId;
-        this.email = email;
+        this.invitedUserId = invitedUserId;
+        this.invitedEmail = invitedEmail;
         this.role = role;
-        this.tokenHash = tokenHash;
         this.invitedBy = invitedBy;
         this.expiresAt = expiresAt;
     }
@@ -75,6 +91,35 @@ public class WorkspaceInvitation {
         updatedAt = Instant.now();
     }
 
+    /** An expired invitation can no longer be accepted, but it may still be declined or revoked. */
+    public void accept(Instant now) {
+        if (status == InvitationStatus.PENDING && !expiresAt.isAfter(now)) {
+            throw new InvitationExpiredException();
+        }
+        transitionTo(InvitationStatus.ACCEPTED);
+    }
+
+    public void decline() {
+        transitionTo(InvitationStatus.DECLINED);
+    }
+
+    public void revoke() {
+        transitionTo(InvitationStatus.REVOKED);
+    }
+
+    /** True when the invitation is still PENDING and has not expired at the given instant. */
+    public boolean isOpenAt(Instant now) {
+        return status == InvitationStatus.PENDING && expiresAt.isAfter(now);
+    }
+
+    private void transitionTo(InvitationStatus next) {
+        if (!status.canTransitionTo(next)) {
+            throw new InvalidInvitationTransitionException(status, next);
+        }
+        status = next;
+        pendingMarker = null;
+    }
+
     public Long getId() {
         return id;
     }
@@ -83,24 +128,20 @@ public class WorkspaceInvitation {
         return workspaceId;
     }
 
-    public String getEmail() {
-        return email;
+    public String getInvitedUserId() {
+        return invitedUserId;
+    }
+
+    public String getInvitedEmail() {
+        return invitedEmail;
     }
 
     public WorkspaceRole getRole() {
         return role;
     }
 
-    public String getTokenHash() {
-        return tokenHash;
-    }
-
     public InvitationStatus getStatus() {
         return status;
-    }
-
-    public void setStatus(InvitationStatus status) {
-        this.status = status;
     }
 
     public String getInvitedBy() {

@@ -2,7 +2,7 @@ package com.example.document;
 
 import com.example.document.repository.DocumentRepository;
 import com.example.document.workspace.WorkspaceClient;
-import com.example.document.workspace.WorkspaceRole;
+import com.example.document.workspace.WorkspaceAccess;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -56,10 +56,10 @@ class DocumentApiTests {
     @BeforeEach
     void setUp() throws Exception {
         repository.deleteAll();
-        when(workspaces.roleOf(anyString(), anyLong())).thenReturn(Optional.empty());
-        when(workspaces.roleOf("7", 5L)).thenReturn(Optional.of(WorkspaceRole.OWNER));
-        when(workspaces.roleOf("8", 5L)).thenReturn(Optional.of(WorkspaceRole.EDITOR));
-        when(workspaces.roleOf("9", 5L)).thenReturn(Optional.of(WorkspaceRole.VIEWER));
+        when(workspaces.accessOf(anyString(), anyLong())).thenReturn(Optional.empty());
+        when(workspaces.accessOf("7", 5L)).thenReturn(Optional.of(new WorkspaceAccess(true)));
+        when(workspaces.accessOf("8", 5L)).thenReturn(Optional.of(new WorkspaceAccess(true)));
+        when(workspaces.accessOf("9", 5L)).thenReturn(Optional.of(new WorkspaceAccess(false)));
         owner = token("7", Instant.now().plusSeconds(600), secret);
         editor = token("8", Instant.now().plusSeconds(600), secret);
         viewer = token("9", Instant.now().plusSeconds(600), secret);

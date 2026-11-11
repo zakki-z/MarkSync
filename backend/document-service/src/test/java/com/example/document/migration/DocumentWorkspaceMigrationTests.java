@@ -1,7 +1,7 @@
 package com.example.document.migration;
 
 import com.example.document.workspace.WorkspaceClient;
-import com.example.document.workspace.WorkspaceRole;
+import com.example.document.workspace.WorkspaceAccess;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,7 +121,7 @@ class DocumentWorkspaceMigrationTests {
 
     private abstract static class StubWorkspaceClient implements WorkspaceClient {
         @Override
-        public Optional<WorkspaceRole> roleOf(String userId, Long workspaceId) {
+        public Optional<WorkspaceAccess> accessOf(String userId, Long workspaceId) {
             throw new UnsupportedOperationException();
         }
     }

@@ -1,28 +1,33 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { AuthUser } from '@/src/authService';
+import { InvitationsProvider } from '@/src/components/InvitationsContext';
 import { Brand } from '@/src/components/ui';
 import { WorkspaceList } from '@/src/components/WorkspaceList';
 import { useEndSession } from '@/src/hooks/useEndSession';
+import { useMyInvitations } from '@/src/hooks/useMyInvitations';
 import { MAX_PINS, usePins } from '@/src/hooks/usePins';
 import { useWorkspaces } from '@/src/hooks/useWorkspaces';
 import { createWorkspace } from '@/src/workspaceService';
 
-/** Sidebar with the workspace switcher and profile for signed-in users. */
+/** Sidebar with the workspace switcher, navigation and profile for signed-in users. */
 export function AppShell({
   user,
   activeWorkspaceId,
   children,
 }: {
   user: AuthUser;
-  activeWorkspaceId: number;
+  activeWorkspaceId?: number;
   children: ReactNode;
 }) {
   const router = useRouter();
   const endSession = useEndSession();
   const { data: workspaces, setData: setWorkspaces } = useWorkspaces();
+  const invitations = useMyInvitations();
+  const pendingCount = invitations.data?.length ?? 0;
   const [error, setError] = useState('');
   const pins = usePins(`marksync:pins:workspaces:${user.id}`);
 
@@ -51,6 +56,14 @@ export function AppShell({
         <button type="button" className="button subtle new-workspace" onClick={addWorkspace}>
           + New workspace
         </button>
+        <Link href="/invitations" className="sidebar-link">
+          My invitations
+          {pendingCount > 0 && (
+            <span className="count-badge" aria-label={`${pendingCount} pending`}>
+              {pendingCount}
+            </span>
+          )}
+        </Link>
         {workspaces && (
           <WorkspaceList
             workspaces={workspaces}
@@ -80,7 +93,9 @@ export function AppShell({
           </button>
         </div>
       </aside>
-      <section className="editor-workspace">{children}</section>
+      <section className="editor-workspace">
+        <InvitationsProvider value={invitations}>{children}</InvitationsProvider>
+      </section>
     </main>
   );
 }

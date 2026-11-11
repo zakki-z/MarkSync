@@ -1,6 +1,8 @@
 export type AuthUser = { id: number; email: string; role: string };
 
-async function authRequest(action: string, credentials?: { email: string; password: string }) {
+type Credentials = { email: string; password: string; username?: string };
+
+async function authRequest(action: string, credentials?: Credentials) {
   const response = await fetch(`/api/auth/${action}`, {
     method: action === 'me' ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -18,7 +20,7 @@ async function authRequest(action: string, credentials?: { email: string; passwo
 
 export const loginUser = (email: string, password: string) =>
   authRequest('login', { email, password });
-export const signupUser = (email: string, password: string) =>
-  authRequest('signup', { email, password });
+export const signupUser = (email: string, password: string, username?: string) =>
+  authRequest('signup', { email, password, ...(username && { username }) });
 export const getCurrentUser = (): Promise<AuthUser> => authRequest('me');
 export const logoutUser = (): Promise<void> => authRequest('logout');

@@ -1,5 +1,7 @@
 package com.example.workspace.exception;
 
+import com.example.workspace.directory.UserDirectoryUnavailableException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,27 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ProblemDetail> forbidden(ForbiddenException ex) {
         return problem(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ProblemDetail> conflict(ConflictException ex) {
+        return problem(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ProblemDetail> badRequest(BadRequestException ex) {
+        return problem(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /** A concurrent request won a race against a unique constraint, e.g. a double accept. */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> raced(DataIntegrityViolationException ex) {
+        return problem(HttpStatus.CONFLICT, "The request conflicts with a concurrent change; reload and retry");
+    }
+
+    @ExceptionHandler(UserDirectoryUnavailableException.class)
+    public ResponseEntity<ProblemDetail> directoryDown(UserDirectoryUnavailableException ex) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -7,9 +7,9 @@ MarkSync is a university software engineering project for private Markdown docum
 | Active component | Stack | Responsibility |
 | --- | --- | --- |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 | Authentication UI, document workspace, Markdown preview, same-origin API adapters |
-| Authentication | Python 3.12, FastAPI, SQLAlchemy, Argon2, JWT | Persistent accounts and signed, one-hour HS256 access tokens |
+| Authentication | Python 3.12, FastAPI, SQLAlchemy, Argon2, JWT | Persistent accounts with usernames, authenticated user lookup, and signed, one-hour HS256 access tokens |
 | Documents | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Workspace-scoped CRUD, visibility, role-based access and saved Markdown |
-| Workspaces | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Foundation only: schema for workspaces, memberships and invitations, plus JWT-protected service shell; no workspace endpoints yet |
+| Workspaces | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Workspaces, memberships with Owner/Editor/Viewer roles, and invitations (send, accept, decline, revoke) |
 | Collaboration | Bun 1.3.14, TypeScript, native WebSockets | Authenticated document rooms, deduplicated presence, heartbeat |
 | Storage | PostgreSQL 17 | Separate `marksync_auth`, `marksync_documents` and `marksync_workspaces` databases in a persistent volume |
 | Gateway | Nginx, Docker Compose | One browser origin for pages, APIs, and `/ws` upgrades |
@@ -42,7 +42,8 @@ Open **http://127.0.0.1:8080** after the services finish starting. The initial b
 | `PORT` | Optional gateway port, default `8080` |
 | `APP_ORIGINS` | Comma-separated exact browser origins; defaults to `http://127.0.0.1:8080,http://localhost:8080` |
 | `COOKIE_SECURE` | Default `false` for local HTTP; set `true` when serving HTTPS |
-| `AUTH_SERVICE_URL` | Internal FastAPI URL, set by Compose to `http://auth:8000` |
+| `AUTH_SERVICE_URL` | Internal FastAPI URL used by the frontend and the Workspace Service (user lookup), set by Compose to `http://auth:8000` |
+| `INVITATION_TTL` | Optional, Workspace Service: how long an invitation can be accepted, default `7d` |
 | `WORKSPACE_SERVICE_URL` | Internal Workspace Service URL used by the Document Service and the frontend, set by Compose to `http://workspace:8083` |
 | `DOCUMENT_SERVICE_URL` | Internal Spring URL, set by Compose to `http://document:8082` |
 | `WORKSPACE_SERVICE_URL` | Internal Spring URL, set by Compose to `http://workspace:8083` |
@@ -72,22 +73,50 @@ Every document belongs to a workspace and has a `visibility` of `PRIVATE` (defau
 | `GET /api/documents/{id}` | optional | Anonymous callers get `PUBLIC` documents only. |
 | `PUT` / `DELETE /api/documents/{id}` | member with edit rights | A document cannot move between workspaces. |
 
-Denied requests return `401` for anonymous callers and `403` for authenticated ones; unknown documents return `404`. Document responses include `workspaceId`, `visibility` and `canEdit`; the UI shows a read-only view whenever `canEdit` is false and does not re-implement the rules. The Workspace Service adds `GET /api/workspaces/{id}/membership` (the caller's role, or `404` for non-members), which the Document Service calls with a short-lived token signed with the shared `JWT_SECRET_KEY`. Pages: `/w/{workspaceId}` (dashboard and workspace switcher) and `/w/{workspaceId}/d/{documentId}` (open to anonymous visitors for public documents). See [ADR-003](docs/adr/ADR-003-workspace-document-authorization.md).
+Denied requests return `401` for anonymous callers and `403` for authenticated ones; unknown documents return `404`. Document responses include `workspaceId`, `visibility` and `canEdit`; the UI shows a read-only view whenever `canEdit` is false and does not re-implement the rules. The Workspace Service adds `GET /api/workspaces/{id}/membership` (the caller's role and what it allows, or `404` for non-members), which the Document Service calls with a short-lived token signed with the shared `JWT_SECRET_KEY`. Pages: `/w/{workspaceId}` (dashboard and workspace switcher) and `/w/{workspaceId}/d/{documentId}` (open to anonymous visitors for public documents). See [ADR-003](docs/adr/ADR-003-workspace-document-authorization.md).
+
+### Invitations and members
+
+Each member has one role per workspace, and the capabilities live in the `WorkspaceRole` enum (the only place they are defined). The membership endpoint returns them, so clients show or hide actions from the response instead of repeating the rules.
+
+| Role | Edit documents | Manage members and invitations | Rename, delete, change visibility |
+| --- | --- | --- | --- |
+| `OWNER` | yes | yes | yes |
+| `EDITOR` | yes | no | no |
+| `VIEWER` | no | no | no |
+
+A workspace always has at least one owner. Invitations can grant `EDITOR` or `VIEWER`; owners promote members with a role change. An invitation goes from `PENDING` to exactly one of `ACCEPTED`, `DECLINED` or `REVOKED`, and any other transition fails with `409`. Invitations expire after `INVITATION_TTL` (default 7 days) and then cannot be accepted. There are no emails or notifications: invitations appear in the app under **Invitations**, with a pending count in the sidebar.
+
+| Endpoint (Workspace Service) | Who | Notes |
+| --- | --- | --- |
+| `POST /api/workspaces/{id}/invitations` | owner | Body `{identifier, role}`, where the identifier is a username or email. `404` for an unknown user, `409` for an existing member or a pending invitation. |
+| `GET /api/workspaces/{id}/invitations` | owner | Pending, unexpired invitations. |
+| `DELETE /api/workspaces/{id}/invitations/{invitationId}` | owner | Revokes a pending invitation. |
+| `GET /api/invitations` | any user | The caller's own pending invitations. |
+| `POST /api/invitations/{id}/accept`, `/decline` | the invited user | Accepting creates the membership in the same transaction. Anyone else gets `404`. |
+| `GET /api/workspaces/{id}/members` | any member | Members with usernames. |
+| `PATCH /api/workspaces/{id}/members/{userId}` | owner | Body `{role}`. The last owner cannot be demoted (`409`). |
+| `DELETE /api/workspaces/{id}/members/{userId}` | owner | The last owner cannot be removed (`409`). |
+| `DELETE /api/workspaces/{id}/membership` | any member | Leave the workspace; the last owner cannot (`409`). |
+
+The Workspace Service stores only user ids (and the email the inviter typed, for display). It finds users and resolves usernames through the Auth service's authenticated `GET /auth/users/lookup?q=` and `GET /auth/users?ids=`, which return only `id` and `username`. Pages: `/w/{workspaceId}/members` and `/invitations`. See [ADR-004](docs/adr/ADR-004-invitations-and-membership.md).
+
+To try it with two accounts: sign up as `olivia` and `dana` (Sign up has an optional username), as Olivia open a workspace, go to **Members** and invite `dana` as Editor, then as Dana open **Invitations** and accept. Dana now edits Olivia's documents; invite a third account as Viewer to see them read-only.
 
 ### Persistence and migrations
 
-`postgres_data` holds both databases. `docker compose down` preserves it; `docker compose down -v` deletes it. Auth creates missing user tables without deleting existing rows. Document schema is managed by `V1__create_documents.sql`; Hibernate only validates it. Flyway baselines an existing Hibernate-managed schema at version 0, then applies the non-destructive migration and owner index. Existing incompatible schemas fail validation rather than being silently rewritten.
+`postgres_data` holds both databases. `docker compose down` preserves it; `docker compose down -v` deletes it. Auth creates missing user tables without deleting existing rows; on startup it also adds and backfills the `users.username` column (from the email's local part) if an older database lacks it. Document schema is managed by `V1__create_documents.sql`; Hibernate only validates it. Flyway baselines an existing Hibernate-managed schema at version 0, then applies the non-destructive migration and owner index. Existing incompatible schemas fail validation rather than being silently rewritten.
 
 MS-02 adds `workspace_id` in three steps: `V2` adds the nullable column, the Java migration `V3__BackfillDocumentWorkspaces` moves every existing document into its author's "Personal" workspace (found or created through the Workspace Service, so it is safe to retry), and `V4` makes the column `NOT NULL` and indexes it. `V5` adds `visibility`. The Document Service therefore needs the Workspace Service reachable (`WORKSPACE_SERVICE_URL`) when it starts against a database that still has documents without a workspace; Compose restarts it on failure until the Workspace Service is up.
 
-The Workspace schema is managed by `V1__create_workspace_schema.sql` (tables `workspaces`, `workspace_members`, `workspace_invitations`); Hibernate only validates it. `infra/postgres/init.sql` creates `marksync_workspaces` only when the PostgreSQL volume is first initialised. If you already have a `postgres_data` volume, either run `docker compose down -v` (deletes all data) or create it once by hand:
+The Workspace schema is managed by `V1__create_workspace_schema.sql` (tables `workspaces`, `workspace_members`, `workspace_invitations`) and `V2__invitations_by_user.sql`, which guarantees every workspace owner an `OWNER` membership and replaces the unused email-token invitations table with one that targets a user id; Hibernate only validates it. `infra/postgres/init.sql` creates `marksync_workspaces` only when the PostgreSQL volume is first initialised. If you already have a `postgres_data` volume, either run `docker compose down -v` (deletes all data) or create it once by hand:
 
 ```sh
 docker compose exec postgres psql -U marksync -d postgres -c "CREATE DATABASE marksync_workspaces;"
 docker compose up -d workspace
 ```
 
-User ids are stored as plain strings with no foreign keys, because users live in the separate Auth database. The "one pending invitation per workspace and email" rule is enforced by the service layer, not the database.
+User ids are stored as plain strings with no foreign keys, because users live in the separate Auth database. "One pending invitation per workspace and user" is enforced by the database: `pending_marker` is `TRUE` only while an invitation is `PENDING` and `NULL` afterwards, and a unique constraint over (workspace, user, marker) allows any number of closed invitations but one open one (a partial index would not run on the H2 test database).
 
 ## Demonstrating Task 1
 
@@ -135,7 +164,7 @@ cd backend/document-service
 ./mvnw -B verify
 ```
 
-Workspaces (Java 21; H2 runs the real Flyway migration and checks the schema constraints):
+Workspaces (Java 21; H2 runs the real Flyway migrations and checks the schema constraints; the Auth service is replaced by an in-memory fake):
 
 ```sh
 cd backend/workspace-service

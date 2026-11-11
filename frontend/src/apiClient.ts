@@ -11,7 +11,7 @@ export class ApiError extends Error {
 /** Calls a same-origin /api route and turns problem responses into ApiError. */
 export async function apiRequest<T>(
   path: string,
-  options: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; data?: unknown } = {},
+  options: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; data?: unknown } = {},
 ): Promise<T> {
   const response = await fetch(path, {
     method: options.method ?? 'GET',

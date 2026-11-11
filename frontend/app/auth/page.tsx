@@ -9,6 +9,7 @@ export default function AuthPage() {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState(false);
@@ -29,7 +30,7 @@ export default function AuthPage() {
         router.refresh();
         return;
       }
-      await signupUser(email, password);
+      await signupUser(email, password, username.trim());
       setPassword('');
       setMessage('Signup successful! Please log in.');
       setIsLogin(true);
@@ -75,6 +76,30 @@ export default function AuthPage() {
               placeholder="you@example.com"
             />
           </div>
+          {!isLogin && (
+            <div>
+              <label htmlFor="username" className="mb-2 block text-sm font-medium">
+                Username (optional)
+              </label>
+              <input
+                id="username"
+                name="username"
+                autoComplete="username"
+                minLength={3}
+                maxLength={32}
+                pattern="[A-Za-z0-9][A-Za-z0-9_.\-]*"
+                disabled={pending}
+                aria-describedby="username-help"
+                className="form-input"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="your-name"
+              />
+              <p id="username-help" className="mt-2 text-xs text-slate-600">
+                3–32 letters, numbers, dots, underscores or hyphens. Others can invite you with it.
+              </p>
+            </div>
+          )}
           <div>
             <label htmlFor="password" className="mb-2 block text-sm font-medium">
               Password

@@ -1,8 +1,16 @@
-import { authenticate } from './documentsProxy';
+import { authenticate, isPositiveId } from './documentsProxy';
 import { fetchUpstream, relay, serviceUnavailable, workspaceBase } from './upstream';
 
-/** Authenticates the session and relays the call; the Workspace Service enforces access rules. */
-export async function forwardToWorkspaces(request: Request, path: string): Promise<Response> {
+/**
+ * Authenticates the session and relays the call; the Workspace Service enforces access rules.
+ * Every id that was interpolated into the path is checked first.
+ */
+export async function forwardToWorkspaces(
+  request: Request,
+  path: string,
+  ids: string[] = [],
+): Promise<Response> {
+  if (!ids.every(isPositiveId)) return Response.json({ detail: 'Invalid ID' }, { status: 400 });
   const auth = await authenticate(request);
   if ('error' in auth) return auth.error;
   const hasBody = request.method === 'POST' || request.method === 'PATCH';

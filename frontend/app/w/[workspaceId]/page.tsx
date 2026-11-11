@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ApiError } from '@/src/apiClient';
 import { AppShell } from '@/src/components/AppShell';
+import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { DocumentList } from '@/src/components/DocumentList';
 import { createDocument } from '@/src/documentService';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
@@ -62,7 +63,7 @@ export default function WorkspaceDashboard() {
     <AppShell user={user} activeWorkspaceId={workspaceId}>
       <header className="workspace-topbar">
         <div className="workspace-location">
-          <strong>Documents</strong>
+          <WorkspaceTabs workspaceId={workspaceId} current="documents" />
         </div>
         <div className="topbar-actions">
           <button className="button primary" onClick={newDocument} disabled={creating}>
