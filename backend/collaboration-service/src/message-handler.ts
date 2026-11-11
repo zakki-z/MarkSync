@@ -16,7 +16,10 @@ const MAX_PENDING = 32;
 export class MessageDispatcher {
   private readonly handlers = new Map<MessageType, MessageHandler>();
 
-  constructor(handlers: AnyMessageHandler[]) {
+  constructor(
+    handlers: AnyMessageHandler[],
+    private readonly clock: () => number = Date.now,
+  ) {
     for (const handler of handlers) this.handlers.set(handler.type, handler as MessageHandler);
   }
 
@@ -26,6 +29,7 @@ export class MessageDispatcher {
    * is answered with an error and the connection stays open.
    */
   dispatch(connection: Connection, raw: unknown): Promise<void> {
+    connection.lastSeen = this.clock();
     const message = parseClientMessage(raw);
     const handler = message && this.handlers.get(message.type);
     if (!message || !handler) {

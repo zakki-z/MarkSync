@@ -48,7 +48,7 @@ export class FakeAccess implements WorkspaceAccessChecker {
 
 let counter = 0;
 /** Registers a fake connection for a user; the token doubles as the user's name. */
-export function connect(app: ReturnType<typeof createApp>, userId: number, now = 0) {
+export function connect(app: ReturnType<typeof createApp>, userId: number, now = app.clock()) {
   const transport = new FakeTransport();
   const connection = new Connection(
     `c${++counter}`,
