@@ -4,7 +4,7 @@ import type { Workspace } from '@/src/workspaceService';
 
 type Props = {
   workspaces: Workspace[];
-  activeId: number;
+  activeId?: number;
   pinned: number[];
   onTogglePin: (id: number) => void;
 };

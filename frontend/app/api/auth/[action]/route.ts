@@ -4,6 +4,20 @@ import { authBase, fetchUpstream, serviceUnavailable } from '@/src/server/upstre
 
 type Context = { params: Promise<{ action: string }> };
 
+// Only these upstream messages are safe to show; anything else becomes the generic one.
+const SIGNUP_CONFLICTS = new Set([
+  'Email already registered',
+  'Username already taken',
+  'Email or username already registered',
+]);
+
+async function conflictDetail(upstream: Response): Promise<string> {
+  const body = (await upstream.json().catch(() => null)) as { detail?: unknown } | null;
+  return typeof body?.detail === 'string' && SIGNUP_CONFLICTS.has(body.detail)
+    ? body.detail
+    : 'Email already registered';
+}
+
 export async function GET(request: Request, context: Context) {
   if ((await context.params).action !== 'me') return new Response(null, { status: 404 });
   const auth = await authenticate(request);
@@ -22,7 +36,7 @@ export async function POST(request: Request, context: Context) {
     });
   }
   if (action !== 'login' && action !== 'signup') return new Response(null, { status: 404 });
-  let credentials: { email: string; password: string };
+  let credentials: { email: string; password: string; username?: string };
   try {
     const body: unknown = await request.json();
     if (
@@ -37,6 +51,10 @@ export async function POST(request: Request, context: Context) {
     )
       throw new Error();
     credentials = { email: body.email.trim(), password: body.password };
+    if (action === 'signup' && 'username' in body && body.username !== undefined) {
+      if (typeof body.username !== 'string' || body.username.length > 32) throw new Error();
+      credentials.username = body.username.trim();
+    }
   } catch {
     return Response.json(
       { detail: 'Enter a valid email and password (maximum 128 characters).' },
@@ -55,9 +73,9 @@ export async function POST(request: Request, context: Context) {
         upstream.status === 401
           ? 'Incorrect email or password'
           : upstream.status === 400 || upstream.status === 409
-            ? 'Email already registered'
+            ? await conflictDetail(upstream)
             : upstream.status === 422
-              ? 'Enter a valid email and a password of 8–128 characters.'
+              ? 'Enter a valid email, a username of 3–32 letters, numbers, dots, underscores or hyphens (optional), and a password of 8–128 characters.'
               : 'Authentication is temporarily unavailable. Please try again.';
       return Response.json({ detail }, { status: upstream.status >= 500 ? 502 : upstream.status });
     }

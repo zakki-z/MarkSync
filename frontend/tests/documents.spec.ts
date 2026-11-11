@@ -26,6 +26,7 @@ async function signIn(page: Page) {
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({ json: { id: 7, email: 'student@sussex.ac.uk', role: 'user' } }),
   );
+  await page.route('**/api/invitations', (route) => route.fulfill({ json: [] }));
 }
 
 test.describe('signed in', () => {
