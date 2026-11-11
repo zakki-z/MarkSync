@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+const workspace = { id: 1, name: 'Personal', visibility: 'PRIVATE', ownerId: '7' };
+
 for (const mode of ['login', 'signup'] as const) {
   test(`${mode} blocks duplicate submissions and never displays a token`, async ({
     page,
@@ -38,7 +40,8 @@ for (const mode of ['login', 'signup'] as const) {
     await page.route('**/api/auth/me', (route) =>
       route.fulfill({ json: { id: 7, email: 'student@sussex.ac.uk', role: 'user' } }),
     );
-    await page.route('**/api/documents', (route) => route.fulfill({ json: [] }));
+    await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+    await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [] }));
     await page.goto('/auth');
     if (mode === 'signup') {
       await page.getByRole('button', { name: "Don't have an account? Sign up" }).click();
@@ -55,7 +58,7 @@ for (const mode of ['login', 'signup'] as const) {
     await expect(page.getByRole('button', { name: 'Please wait…' })).toBeDisabled();
     await expect(page.getByRole('button', { name: /account\?/ })).toBeDisabled();
     release();
-    if (mode === 'login') await expect(page).toHaveURL('/documents');
+    if (mode === 'login') await expect(page).toHaveURL('/w/1');
     else {
       await expect(page.getByText('Signup successful! Please log in.')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Login', exact: true })).toBeEnabled();
@@ -90,14 +93,15 @@ test('shows API errors and allows retry after failure', async ({ page, context }
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({ json: { id: 7, email: 'student@sussex.ac.uk', role: 'user' } }),
   );
-  await page.route('**/api/documents', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
+  await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [] }));
   await page.route('**/api/auth/login', (route) =>
     route.fulfill({
       json: { access_token: 'retry-private-token', token_type: 'bearer' },
     }),
   );
   await page.getByRole('button', { name: 'Login', exact: true }).click();
-  await expect(page).toHaveURL('/documents');
+  await expect(page).toHaveURL('/w/1');
   await expect(page.getByText('Incorrect email or password')).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('retry-private-token');
 });

@@ -19,7 +19,7 @@ import java.net.URI;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/documents")
+@RequestMapping("/api")
 public class DocumentController {
     private final DocumentService service;
 
@@ -27,28 +27,30 @@ public class DocumentController {
         this.service = service;
     }
 
-    @PostMapping
-    public ResponseEntity<DocumentDTO> create(@Valid @RequestBody DocumentDTO dto, @AuthenticationPrincipal Jwt jwt) {
-        DocumentDTO created = service.create(dto, jwt.getSubject());
+    @PostMapping("/workspaces/{workspaceId}/documents")
+    public ResponseEntity<DocumentDTO> create(@PathVariable Long workspaceId, @Valid @RequestBody DocumentDTO dto,
+                                              @AuthenticationPrincipal Jwt jwt) {
+        DocumentDTO created = service.create(workspaceId, dto, jwt.getSubject());
         return ResponseEntity.created(URI.create("/api/documents/" + created.getId())).body(created);
     }
 
-    @GetMapping
-    public ResponseEntity<List<DocumentDTO>> getAll(@AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(service.getAll(jwt.getSubject()));
+    @GetMapping("/workspaces/{workspaceId}/documents")
+    public ResponseEntity<List<DocumentDTO>> getAll(@PathVariable Long workspaceId, @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(service.getAll(workspaceId, jwt.getSubject()));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/documents/{id}")
     public ResponseEntity<DocumentDTO> getById(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(service.getById(id, jwt.getSubject()));
+        // The read endpoint is public, so the caller may be anonymous (no JWT).
+        return ResponseEntity.ok(service.getById(id, jwt == null ? null : jwt.getSubject()));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/documents/{id}")
     public ResponseEntity<DocumentDTO> update(@PathVariable Long id, @Valid @RequestBody DocumentDTO dto, @AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(service.update(id, dto, jwt.getSubject()));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/documents/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
         service.delete(id, jwt.getSubject());
         return ResponseEntity.noContent().build();

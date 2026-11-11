@@ -44,14 +44,16 @@ credentials = {
 wait_for("/api/auth/signup", credentials)
 request("/api/auth/login", credentials)
 draft = {"title": "Restart persistence check", "markdown": "# Durable Markdown\n\nSaved."}
-wait_for("/api/documents")
-saved = request("/api/documents", draft)
+workspace = wait_for("/api/workspaces", {"name": "Persistence check"})
+saved = request(f"/api/workspaces/{workspace['id']}/documents", draft)
 subprocess.run(
-    ["docker", "compose", "restart", "postgres", "auth", "document"], check=True
+    ["docker", "compose", "restart", "postgres", "auth", "document", "workspace"],
+    check=True,
 )
 wait_for("/api/auth/login", credentials)
 reopened = wait_for(f"/api/documents/{saved['id']}")
 assert reopened["title"] == draft["title"]
 assert reopened["markdown"] == draft["markdown"]
 assert reopened["authorId"] == saved["authorId"]
+assert reopened["workspaceId"] == workspace["id"]
 print("PASS: account login and saved Markdown survived PostgreSQL and service restarts")

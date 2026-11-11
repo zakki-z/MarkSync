@@ -1,5 +1,6 @@
 package com.example.document.dto;
 
+import com.example.document.entity.DocumentVisibility;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -26,9 +27,16 @@ public class DocumentDTO {
     @Size(max = 120, message = "Author ID must be at most 120 characters")
     private String authorId;
 
+    private Long workspaceId;
+
+    private DocumentVisibility visibility;
+
     @NotNull(message = "Markdown content is required")
     @Size(max = 1000000, message = "Markdown is too long")
     private String markdown;
+
+    /** Response only: whether the caller may edit this document. */
+    private Boolean canEdit;
 
     private Instant createdAt;
     private Instant updatedAt;

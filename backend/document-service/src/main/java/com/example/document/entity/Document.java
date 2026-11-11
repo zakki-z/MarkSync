@@ -2,6 +2,8 @@ package com.example.document.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,6 +35,14 @@ public class Document {
 
     @Column(name = "author_id", nullable = false, length = 120, updatable = false)
     private String authorId;
+
+    @Column(name = "workspace_id", nullable = false, updatable = false)
+    private Long workspaceId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private DocumentVisibility visibility = DocumentVisibility.PRIVATE;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String markdown;

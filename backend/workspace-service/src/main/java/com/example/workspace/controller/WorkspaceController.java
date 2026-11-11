@@ -1,6 +1,7 @@
 package com.example.workspace.controller;
 
 import com.example.workspace.dto.CreateWorkspaceRequest;
+import com.example.workspace.dto.MembershipResponse;
 import com.example.workspace.dto.UpdateWorkspaceRequest;
 import com.example.workspace.dto.WorkspaceResponse;
 import com.example.workspace.service.WorkspaceService;
@@ -44,6 +45,11 @@ public class WorkspaceController {
     @GetMapping("/{id}")
     public WorkspaceResponse get(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
         return service.get(id, jwt.getSubject());
+    }
+
+    @GetMapping("/{id}/membership")
+    public MembershipResponse membership(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+        return service.membership(id, jwt.getSubject());
     }
 
     @PatchMapping("/{id}")

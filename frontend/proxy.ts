@@ -16,4 +16,6 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: '/documents/:path*' };
+// The workspace dashboard needs a session. Document pages (/w/:id/d/:id) stay open so that public
+// documents can be read anonymously; the Document Service decides what each visitor may see.
+export const config = { matcher: ['/documents/:path*', '/w/:workspaceId'] };

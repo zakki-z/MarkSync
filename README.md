@@ -8,7 +8,7 @@ MarkSync is a university software engineering project for private Markdown docum
 | --- | --- | --- |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 | Authentication UI, document workspace, Markdown preview, same-origin API adapters |
 | Authentication | Python 3.12, FastAPI, SQLAlchemy, Argon2, JWT | Persistent accounts and signed, one-hour HS256 access tokens |
-| Documents | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Owner-scoped CRUD and saved Markdown |
+| Documents | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Workspace-scoped CRUD, visibility, role-based access and saved Markdown |
 | Workspaces | Java 21, Spring Boot 4, Spring Security, JPA, Flyway | Foundation only: schema for workspaces, memberships and invitations, plus JWT-protected service shell; no workspace endpoints yet |
 | Collaboration | Bun 1.3.14, TypeScript, native WebSockets | Authenticated document rooms, deduplicated presence, heartbeat |
 | Storage | PostgreSQL 17 | Separate `marksync_auth`, `marksync_documents` and `marksync_workspaces` databases in a persistent volume |
@@ -16,9 +16,9 @@ MarkSync is a university software engineering project for private Markdown docum
 
 AI and Notification directories remain future service skeletons and are not started by Compose. The Workspace service is started by Compose (internal port 8083, not routed through Nginx yet) and its Maven CI check is preserved.
 
-Browser traffic goes through Nginx. `/auth` is a Next.js page; `/api/auth/*` is a Next.js adapter for FastAPI's internal `/auth/*` endpoints. `/api/documents/*` forwards authenticated requests to Spring. `/ws` goes directly to Bun. Container hostnames are used only between services.
+Browser traffic goes through Nginx. `/auth` is a Next.js page; `/api/auth/*` is a Next.js adapter for FastAPI's internal `/auth/*` endpoints. `/api/documents/*` and `/api/workspaces/*/documents` forward requests to the Document Service; only `GET /api/documents/{id}` is open to anonymous visitors. `/ws` goes directly to Bun. Container hostnames are used only between services.
 
-The JWT is kept in a host-only, HttpOnly, SameSite=Lax cookie, never browser storage or a WebSocket URL. Next.js validates it before serving `/documents` and before proxying document requests. Spring independently verifies the signature and expiry and derives ownership from the subject, ignoring a supplied author on creation. Mutating browser requests require an allowed Origin; WebSocket upgrades require an allowed Origin and authentication. Invalid sessions are cleared. Logout clears the browser cookie; issued bearer tokens are stateless and expire after one hour, without a server revocation list.
+The JWT is kept in a host-only, HttpOnly, SameSite=Lax cookie, never browser storage or a WebSocket URL. Next.js validates it before serving `/documents` and before proxying document requests. Spring independently verifies the signature and expiry, derives the caller from the subject and ignores a supplied author on creation; the Document Service then asks the Workspace Service for the caller's role (see below). Mutating browser requests require an allowed Origin; WebSocket upgrades require an allowed Origin and authentication. Invalid sessions are cleared. Logout clears the browser cookie; issued bearer tokens are stateless and expire after one hour, without a server revocation list.
 
 ## Local setup
 
@@ -43,6 +43,7 @@ Open **http://127.0.0.1:8080** after the services finish starting. The initial b
 | `APP_ORIGINS` | Comma-separated exact browser origins; defaults to `http://127.0.0.1:8080,http://localhost:8080` |
 | `COOKIE_SECURE` | Default `false` for local HTTP; set `true` when serving HTTPS |
 | `AUTH_SERVICE_URL` | Internal FastAPI URL, set by Compose to `http://auth:8000` |
+| `WORKSPACE_SERVICE_URL` | Internal Workspace Service URL used by the Document Service and the frontend, set by Compose to `http://workspace:8083` |
 | `DOCUMENT_SERVICE_URL` | Internal Spring URL, set by Compose to `http://document:8082` |
 | `WORKSPACE_SERVICE_URL` | Internal Spring URL, set by Compose to `http://workspace:8083` |
 | `DATABASE_URL` | Auth SQLAlchemy URL, set by Compose |
@@ -53,9 +54,31 @@ If port 8080 is occupied, set both `PORT=18080` and `APP_ORIGINS=http://127.0.0.
 
 Secrets and local environment files must not be committed. Use the same generated secrets across restarts. Changing the database password in `.env` does not change an already-created PostgreSQL role.
 
+### Workspace documents and visibility
+
+Every document belongs to a workspace and has a `visibility` of `PRIVATE` (default) or `PUBLIC`. All access rules live in one place, `DocumentAccessPolicy` in the Document Service, so other services can reuse them:
+
+| Who | Read | Edit / delete / create |
+| --- | --- | --- |
+| Workspace `OWNER` or `EDITOR` | yes | yes |
+| Workspace `VIEWER` | yes | no |
+| Authenticated non-member | only `PUBLIC` documents | no |
+| Anonymous visitor | only `PUBLIC` documents | no |
+
+| Endpoint | Auth | Notes |
+| --- | --- | --- |
+| `POST /api/workspaces/{id}/documents` | member with edit rights | Server assigns the author and workspace. |
+| `GET /api/workspaces/{id}/documents` | any member | Lists the workspace's documents. |
+| `GET /api/documents/{id}` | optional | Anonymous callers get `PUBLIC` documents only. |
+| `PUT` / `DELETE /api/documents/{id}` | member with edit rights | A document cannot move between workspaces. |
+
+Denied requests return `401` for anonymous callers and `403` for authenticated ones; unknown documents return `404`. Document responses include `workspaceId`, `visibility` and `canEdit`; the UI shows a read-only view whenever `canEdit` is false and does not re-implement the rules. The Workspace Service adds `GET /api/workspaces/{id}/membership` (the caller's role, or `404` for non-members), which the Document Service calls with a short-lived token signed with the shared `JWT_SECRET_KEY`. Pages: `/w/{workspaceId}` (dashboard and workspace switcher) and `/w/{workspaceId}/d/{documentId}` (open to anonymous visitors for public documents). See [ADR-003](docs/adr/ADR-003-workspace-document-authorization.md).
+
 ### Persistence and migrations
 
 `postgres_data` holds both databases. `docker compose down` preserves it; `docker compose down -v` deletes it. Auth creates missing user tables without deleting existing rows. Document schema is managed by `V1__create_documents.sql`; Hibernate only validates it. Flyway baselines an existing Hibernate-managed schema at version 0, then applies the non-destructive migration and owner index. Existing incompatible schemas fail validation rather than being silently rewritten.
+
+MS-02 adds `workspace_id` in three steps: `V2` adds the nullable column, the Java migration `V3__BackfillDocumentWorkspaces` moves every existing document into its author's "Personal" workspace (found or created through the Workspace Service, so it is safe to retry), and `V4` makes the column `NOT NULL` and indexes it. `V5` adds `visibility`. The Document Service therefore needs the Workspace Service reachable (`WORKSPACE_SERVICE_URL`) when it starts against a database that still has documents without a workspace; Compose restarts it on failure until the Workspace Service is up.
 
 The Workspace schema is managed by `V1__create_workspace_schema.sql` (tables `workspaces`, `workspace_members`, `workspace_invitations`); Hibernate only validates it. `infra/postgres/init.sql` creates `marksync_workspaces` only when the PostgreSQL volume is first initialised. If you already have a `postgres_data` volume, either run `docker compose down -v` (deletes all data) or create it once by hand:
 
