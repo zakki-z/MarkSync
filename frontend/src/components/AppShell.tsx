@@ -56,22 +56,14 @@ export function AppShell({
         <button type="button" className="button subtle new-workspace" onClick={addWorkspace}>
           + New workspace
         </button>
-        <nav className="sidebar-nav" aria-label="Workspace navigation">
-          {activeWorkspaceId !== undefined && (
-            <>
-              <Link href={`/w/${activeWorkspaceId}`}>Documents</Link>
-              <Link href={`/w/${activeWorkspaceId}/members`}>Members</Link>
-            </>
+        <Link href="/invitations" className="sidebar-link">
+          My invitations
+          {pendingCount > 0 && (
+            <span className="count-badge" aria-label={`${pendingCount} pending`}>
+              {pendingCount}
+            </span>
           )}
-          <Link href="/invitations">
-            Invitations
-            {pendingCount > 0 && (
-              <span className="count-badge" aria-label={`${pendingCount} pending`}>
-                {pendingCount}
-              </span>
-            )}
-          </Link>
-        </nav>
+        </Link>
         {workspaces && (
           <WorkspaceList
             workspaces={workspaces}

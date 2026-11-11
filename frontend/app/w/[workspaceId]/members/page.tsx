@@ -3,25 +3,20 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AppShell } from '@/src/components/AppShell';
-import { InviteForm } from '@/src/components/InviteForm';
 import { MemberList } from '@/src/components/MemberList';
-import { PendingInvitations } from '@/src/components/PendingInvitations';
+import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
 import { useMembers } from '@/src/hooks/useMembers';
 import { useMembership } from '@/src/hooks/useMembership';
-import { useWorkspaceInvitations } from '@/src/hooks/useWorkspaceInvitations';
 import {
   changeMemberRole,
   leaveWorkspace,
   removeMember,
-  revokeInvitation,
-  sendInvitation,
-  type Invitation,
   type Member,
   type Role,
 } from '@/src/workspaceService';
 
-/** Members and invitations of one workspace. Owners manage; every other role sees a read-only list. */
+/** Members of one workspace. Owners manage roles; every other role sees a read-only list. */
 export default function MembersPage() {
   const router = useRouter();
   const workspaceId = Number(useParams<{ workspaceId: string }>().workspaceId);
@@ -29,7 +24,6 @@ export default function MembersPage() {
   const membership = useMembership(workspaceId);
   const members = useMembers(workspaceId);
   const canManage = membership.data?.canManageMembers ?? false;
-  const invitations = useWorkspaceInvitations(workspaceId, canManage);
   const [actionError, setActionError] = useState('');
 
   const run = async (action: () => Promise<void>, fallback: string) => {
@@ -61,15 +55,6 @@ export default function MembersPage() {
       </main>
     );
 
-  const invite = async (identifier: string, role: Role) => {
-    const sent = await sendInvitation(workspaceId, identifier, role);
-    invitations.setData([sent, ...(invitations.data ?? [])]);
-  };
-  const revoke = (invitation: Invitation) =>
-    run(async () => {
-      await revokeInvitation(workspaceId, invitation.id);
-      invitations.setData((invitations.data ?? []).filter((i) => i.id !== invitation.id));
-    }, 'Unable to revoke the invitation.');
   const changeRole = (member: Member, role: Role) =>
     run(async () => {
       const updated = await changeMemberRole(workspaceId, member.userId, role);
@@ -90,7 +75,7 @@ export default function MembersPage() {
     <AppShell user={user} activeWorkspaceId={workspaceId}>
       <header className="workspace-topbar">
         <div className="workspace-location">
-          <strong>Members</strong>
+          <WorkspaceTabs workspaceId={workspaceId} current="members" />
           <span className="readonly-badge">{membership.data.role.toLowerCase()}</span>
         </div>
       </header>
@@ -100,13 +85,6 @@ export default function MembersPage() {
             {actionError}
           </div>
         )}
-        {canManage && <InviteForm onInvite={invite} />}
-        {canManage && invitations.error && (
-          <div className="alert error" role="alert">
-            {invitations.error.message}
-          </div>
-        )}
-        {canManage && <PendingInvitations invitations={invitations.data ?? []} onRevoke={revoke} />}
         <MemberList
           members={members.data}
           currentUserId={String(user.id)}

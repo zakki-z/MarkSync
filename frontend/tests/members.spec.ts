@@ -44,8 +44,10 @@ async function signIn(page: Page, userId = 7) {
   await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
 }
 
-test.describe('members page', () => {
-  test('an owner invites, revokes, changes roles and removes members', async ({ page }) => {
+test.describe('members and invitations pages', () => {
+  test('an owner invites and revokes on the invitations page and manages roles on the members page', async ({
+    page,
+  }) => {
     await signIn(page);
     let pending = [invitation()];
     let members = [member('7', 'olivia', 'OWNER'), member('9', 'vera', 'VIEWER')];
@@ -77,10 +79,9 @@ test.describe('members page', () => {
       route.fulfill({ status: 204 }),
     );
 
-    await page.goto('/w/1/members');
+    await page.goto('/w/1/invitations');
     await expect(page.getByRole('heading', { name: 'Invite someone' })).toBeVisible();
     await expect(page.getByText('dana')).toBeVisible();
-    await expect(page.getByText('olivia (you)')).toBeVisible();
 
     await page.getByLabel('Username or email').fill('omar');
     await page.locator('.invite-form select').selectOption('VIEWER');
@@ -91,6 +92,9 @@ test.describe('members page', () => {
     await page.getByRole('button', { name: 'Revoke invitation for dana' }).click();
     await expect(page.getByText('dana')).toHaveCount(0);
 
+    await page.getByRole('link', { name: 'Members' }).click();
+    await expect(page.getByRole('heading', { name: 'Invite someone' })).toHaveCount(0);
+    await expect(page.getByText('olivia (you)')).toBeVisible();
     await page.getByLabel('Role of vera').selectOption('EDITOR');
     await expect(page.getByLabel('Role of vera')).toHaveValue('EDITOR');
 
@@ -113,7 +117,6 @@ test.describe('members page', () => {
     );
 
     await page.goto('/w/1/members');
-    await expect(page.getByText('No pending invitations.')).toBeVisible();
     await page.getByLabel('Role of olivia').selectOption('VIEWER');
     await expect(page.locator('.alert.error')).toContainText('at least one owner');
     await expect(page.getByLabel('Role of olivia')).toHaveValue('OWNER');
@@ -134,7 +137,8 @@ test.describe('members page', () => {
       else await route.fulfill({ json: [] });
     });
 
-    await page.goto('/w/1/members');
+    await page.goto('/w/1/invitations');
+    await expect(page.getByText('No pending invitations.')).toBeVisible();
     await page.getByLabel('Username or email').fill('ghost');
     await page.getByRole('button', { name: 'Send invitation' }).click();
     await expect(page.locator('.alert.error')).toContainText('No user matches');
@@ -162,11 +166,13 @@ test.describe('members page', () => {
 
     await page.goto('/w/1/members');
     await expect(page.getByText('olivia')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Invite someone' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Pending invitations' })).toHaveCount(0);
     await expect(page.getByRole('combobox')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Remove|Revoke/ })).toHaveCount(0);
+    await page.getByRole('link', { name: 'Invitations', exact: true }).click();
+    await expect(page.getByText('Only workspace owners can invite')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Invite someone' })).toHaveCount(0);
     expect(invitationRequests).toBe(0);
+    await page.getByRole('link', { name: 'Members', exact: true }).click();
 
     await page.route('**/api/documents*', (route) => route.fulfill({ json: [] }));
     await page.getByRole('button', { name: 'Leave' }).click();

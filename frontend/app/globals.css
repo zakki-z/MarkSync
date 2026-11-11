@@ -723,16 +723,11 @@ body {
   margin-bottom: 4px;
 }
 
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 8px 0;
-}
-.sidebar-nav a {
+.sidebar-link {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin: 4px 0 8px;
   padding: 9px 10px;
   border-radius: 9px;
   color: #334155;
@@ -740,8 +735,27 @@ body {
   font-weight: 600;
   text-decoration: none;
 }
-.sidebar-nav a:hover {
+.sidebar-link:hover {
   background: #f5f8fd;
+}
+.workspace-tabs {
+  display: flex;
+  gap: 4px;
+}
+.workspace-tab {
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.workspace-tab:hover {
+  background: #f1f5f9;
+}
+.workspace-tab.active {
+  background: #ecf5ff;
+  color: #075ab5;
 }
 .count-badge {
   min-width: 20px;
@@ -772,6 +786,13 @@ body {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px;
+}
+.inline-form label {
+  display: flex;
+  flex-direction: column;
+}
+.invite-form input.field {
+  min-width: 260px;
 }
 .field-label {
   display: block;
