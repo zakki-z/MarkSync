@@ -45,7 +45,9 @@ wait_for("/api/auth/signup", credentials)
 request("/api/auth/login", credentials)
 draft = {"title": "Restart persistence check", "markdown": "# Durable Markdown\n\nSaved."}
 workspace = wait_for("/api/workspaces", {"name": "Persistence check"})
-saved = request(f"/api/workspaces/{workspace['id']}/documents", draft)
+# The document service can still be starting (its migration waits for the
+# workspace service), so retry; a 502 means the request never reached it.
+saved = wait_for(f"/api/workspaces/{workspace['id']}/documents", draft)
 subprocess.run(
     ["docker", "compose", "restart", "postgres", "auth", "document", "workspace"],
     check=True,
