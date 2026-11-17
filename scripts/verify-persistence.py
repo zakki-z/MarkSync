@@ -1,5 +1,6 @@
 """Exercise saved auth and document data across Compose service restarts."""
 
+import http.client
 import http.cookiejar
 import json
 import os
@@ -31,7 +32,11 @@ def wait_for(path, data=None):
     while True:
         try:
             return request(path, data)
-        except (urllib.error.URLError, TimeoutError):
+        # URLError covers refused connections and HTTP errors such as 502.
+        # A server that accepts and then drops the connection while it starts
+        # raises from getresponse() unwrapped (RemoteDisconnected, a
+        # ConnectionResetError, or another HTTPException), so retry those too.
+        except (OSError, http.client.HTTPException):
             if time.monotonic() >= deadline:
                 raise RuntimeError("Services did not become ready") from None
             time.sleep(1)
