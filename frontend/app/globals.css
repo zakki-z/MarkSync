@@ -1,23 +1,27 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+@import '../src/styles/tokens.css';
 
+/*
+ * Legacy styles below predate the design tokens (src/styles/tokens.css) and keep hard-coded
+ * light colours and fonts on purpose: existing screens must not change until they are migrated.
+ * Remove the pinned values here as each screen moves to the token utilities.
+ */
 :root {
-  --font-geist-sans: Arial, Helvetica, sans-serif;
-  --font-geist-mono: 'Courier New', monospace;
-  --background: #ffffff;
-  --foreground: #171717;
+  --legacy-font-sans: Arial, Helvetica, sans-serif;
+  --legacy-font-mono: 'Courier New', monospace;
 }
 
+/* Preflight defaults (html, code, pre...) stay on the legacy fonts until screens migrate. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --default-font-family: var(--legacy-font-sans);
+  --default-mono-font-family: var(--legacy-font-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: #171717;
+  font-family: var(--legacy-font-sans), Arial, Helvetica, sans-serif;
 }
 
 /* Workspace layout and Markdown typography. */
@@ -26,10 +30,9 @@ body {
   --blue: #0070f3;
   --blue-dark: #0059c7;
   --line: #e8edf4;
-  --muted: #6e7a8d;
   color: #1c2738;
   background: #f7f9fc;
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--legacy-font-sans), Arial, Helvetica, sans-serif;
 }
 .workspace button,
 .loading-screen button {
@@ -408,7 +411,7 @@ body {
   color: #314357;
   line-height: 1.85;
   font-size: 13px;
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--legacy-font-mono), monospace;
 }
 .markdown-editor::placeholder {
   color: #b2bbca;
