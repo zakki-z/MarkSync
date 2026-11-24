@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ApiError } from '@/src/apiClient';
 import { AppShell } from '@/src/components/AppShell';
@@ -15,6 +15,7 @@ import { useCreateDocument } from '@/src/queries/mutations';
 export default function WorkspaceDashboard() {
   const router = useRouter();
   const endSession = useEndSession();
+  const expireSession = useCallback(() => void endSession(), [endSession]);
   const workspaceId = Number(useParams<{ workspaceId: string }>().workspaceId);
   const { user, loading: userLoading } = useCurrentUser();
   const { data: documents, error, loading } = useWorkspaceDocuments(workspaceId);
@@ -82,7 +83,7 @@ export default function WorkspaceDashboard() {
         <WorkspacePresencePanel
           workspaceId={workspaceId}
           currentUserId={user.id}
-          onSessionExpired={() => void endSession()}
+          onSessionExpired={expireSession}
         />
         <DocumentList workspaceId={workspaceId} userId={user.id} documents={documents} />
       </div>

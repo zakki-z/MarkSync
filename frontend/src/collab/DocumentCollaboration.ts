@@ -39,7 +39,6 @@ export type CollaborationSnapshot = {
   synced: boolean;
   /** The server's state arrived at least once, so the text can be trusted and edited. */
   hasSynced: boolean;
-  markdown: string;
 };
 
 export const CONTENT_FIELD = 'content';
@@ -73,9 +72,10 @@ export class DocumentCollaboration {
     canEdit: undefined,
     synced: false,
     hasSynced: false,
-    markdown: '',
   };
   private readonly listeners = new Set<() => void>();
+  private readonly textListeners = new Set<() => void>();
+  private textCache?: string;
   private readonly documentId: number;
   private readonly createSocket: () => DocumentSocket;
   private readonly scheduler: Scheduler;
@@ -98,7 +98,10 @@ export class DocumentCollaboration {
     this.awareness.setLocalState({});
     this.doc.on('update', this.onDocumentUpdate);
     this.awareness.on('update', this.onAwarenessUpdate);
-    this.text.observe(() => this.update({ markdown: this.text.toString() }));
+    this.text.observe(() => {
+      this.textCache = undefined;
+      for (const listener of this.textListeners) listener();
+    });
   }
 
   getSnapshot = () => this.snapshot;
@@ -110,8 +113,22 @@ export class DocumentCollaboration {
     };
   };
 
+  /**
+   * The text changes on every keystroke, so it is not part of the snapshot: that would re-render
+   * everything that shows the connection state. Components that need the text subscribe to it
+   * here (useSyncExternalStore), and it is only turned into a string when one of them asks.
+   */
+  getText = () => (this.textCache ??= this.text.toString());
+
+  subscribeText = (listener: () => void) => {
+    this.textListeners.add(listener);
+    return () => {
+      this.textListeners.delete(listener);
+    };
+  };
+
   start() {
-    this.update({ markdown: this.text.toString() });
+    this.update({});
     this.connect();
   }
 
@@ -124,6 +141,7 @@ export class DocumentCollaboration {
     if (this.joined) this.transmitMessage({ type: 'document-leave', documentId: this.documentId });
     this.detach();
     this.listeners.clear();
+    this.textListeners.clear();
     this.awareness.destroy();
     this.undoManager.destroy();
     this.doc.destroy();

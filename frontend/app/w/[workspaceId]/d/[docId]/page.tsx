@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ApiError } from '@/src/apiClient';
@@ -21,6 +22,7 @@ function unavailableMessage(error: Error | undefined): string {
 export default function DocumentPage() {
   const router = useRouter();
   const endSession = useEndSession();
+  const expireSession = useCallback(() => void endSession(), [endSession]);
   const params = useParams<{ workspaceId: string; docId: string }>();
   const workspaceId = Number(params.workspaceId);
   const { user, loading: userLoading } = useCurrentUser();
@@ -57,7 +59,7 @@ export default function DocumentPage() {
       document={document}
       user={user}
       onDeleted={() => router.push(`/w/${document.workspaceId}`)}
-      onSessionExpired={() => void endSession()}
+      onSessionExpired={expireSession}
     />
   );
   if (user)

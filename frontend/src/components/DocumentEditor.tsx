@@ -6,10 +6,10 @@ import type { AuthUser } from '@/src/authService';
 import { ApiError } from '@/src/apiClient';
 import type { DocumentDTO, DocumentDraft, DocumentVisibility } from '@/src/documentService';
 import { ConnectionStatus } from '@/src/components/ConnectionStatus';
+import { CharacterCount, LivePreview } from '@/src/components/LiveMarkdown';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
 import { useCollaborativeDocument } from '@/src/hooks/useCollaborativeDocument';
 import { useMembership } from '@/src/hooks/useMembership';
-import { MarkdownPreview } from '@/src/MarkdownPreview';
 import { useDeleteDocument, useUpdateDocument } from '@/src/queries/mutations';
 
 /**
@@ -78,10 +78,11 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
   const original = toDraft(saved);
   const dirty = draft.title !== original.title || draft.visibility !== original.visibility;
   // Until the server's state has arrived, the REST copy (kept current by the server) is shown.
-  const markdown = snapshot?.hasSynced ? snapshot.markdown : saved.markdown;
+  // The text itself is read by the leaves below, never here, so typing does not re-render this page.
+  const synced = snapshot?.hasSynced === true;
   // The server has the last word on editing: it can withdraw it while the page is open.
-  const editable = !readOnly && snapshot?.hasSynced === true && snapshot.canEdit === true;
-  const permissionLost = !readOnly && snapshot?.hasSynced === true && snapshot.canEdit === false;
+  const editable = !readOnly && synced && snapshot?.canEdit === true;
+  const permissionLost = !readOnly && synced && snapshot?.canEdit === false;
 
   useEffect(() => {
     if (!dirty) return;
@@ -249,12 +250,12 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
             )
           ) : (
             <div className="markdown-preview">
-              <MarkdownPreview markdown={markdown} />
+              <LivePreview collab={live?.collab} live={synced} fallback={saved.markdown} />
             </div>
           )}
         </div>
         <div className="editor-status">
-          <span>Markdown · {markdown.length.toLocaleString()} characters</span>
+          <CharacterCount collab={live?.collab} live={synced} fallback={saved.markdown} />
           {snapshot && (
             <span className="status-group">
               <ConnectionStatus status={snapshot.status} />
