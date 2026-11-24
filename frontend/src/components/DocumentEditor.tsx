@@ -4,18 +4,13 @@ import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import type { AuthUser } from '@/src/authService';
 import { ApiError } from '@/src/apiClient';
-import {
-  deleteDocument,
-  updateDocument,
-  type DocumentDTO,
-  type DocumentDraft,
-  type DocumentVisibility,
-} from '@/src/documentService';
+import type { DocumentDTO, DocumentDraft, DocumentVisibility } from '@/src/documentService';
 import { ConnectionStatus } from '@/src/components/ConnectionStatus';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
 import { useCollaborativeDocument } from '@/src/hooks/useCollaborativeDocument';
 import { useMembership } from '@/src/hooks/useMembership';
 import { MarkdownPreview } from '@/src/MarkdownPreview';
+import { useDeleteDocument, useUpdateDocument } from '@/src/queries/mutations';
 
 /**
  * CodeMirror and its language packs are about half of the document route's JavaScript. They load
@@ -66,6 +61,8 @@ const toDraft = (doc: DocumentDTO): DocumentDraft => ({
  * visibility are saved through the REST API; the Markdown is edited live through collaboration.
  */
 export function DocumentEditor({ document: initial, user, onDeleted, onSessionExpired }: Props) {
+  const updateDocument = useUpdateDocument().mutateAsync;
+  const deleteDocument = useDeleteDocument().mutateAsync;
   const mutationPending = useRef(false);
   const [saved, setSaved] = useState(initial);
   const [draft, setDraft] = useState(toDraft(initial));
@@ -119,7 +116,11 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
       return;
     }
     return run(async () => {
-      const updated = await updateDocument(saved.id, { ...draft, title: draft.title.trim() });
+      const updated = await updateDocument({
+        id: saved.id,
+        workspaceId: saved.workspaceId,
+        draft: { ...draft, title: draft.title.trim() },
+      });
       // The response carries the stored seed copy of the Markdown, which is not the live text.
       setSaved({ ...updated, markdown: saved.markdown });
       setDraft(toDraft(updated));
@@ -130,7 +131,7 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
   const remove = () => {
     if (!window.confirm('Delete this document permanently?')) return;
     return run(async () => {
-      await deleteDocument(saved.id);
+      await deleteDocument({ id: saved.id, workspaceId: saved.workspaceId });
       onDeleted();
     }, 'Unable to delete document.');
   };

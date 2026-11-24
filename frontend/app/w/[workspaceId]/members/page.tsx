@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { AppShell } from '@/src/components/AppShell';
 import { MemberList } from '@/src/components/MemberList';
@@ -8,6 +9,7 @@ import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
 import { useMembers } from '@/src/hooks/useMembers';
 import { useMembership } from '@/src/hooks/useMembership';
+import { queryKeys } from '@/src/queries/keys';
 import {
   changeMemberRole,
   leaveWorkspace,
@@ -19,6 +21,7 @@ import {
 /** Members of one workspace. Owners manage roles; every other role sees a read-only list. */
 export default function MembersPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const workspaceId = Number(useParams<{ workspaceId: string }>().workspaceId);
   const { user, loading: userLoading } = useCurrentUser();
   const membership = useMembership(workspaceId);
@@ -68,6 +71,8 @@ export default function MembersPage() {
   const leave = () =>
     run(async () => {
       await leaveWorkspace(workspaceId);
+      // Everything cached for this workspace, and the sidebar list, is now out of date.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
       router.push('/documents');
     }, 'Unable to leave the workspace.');
 

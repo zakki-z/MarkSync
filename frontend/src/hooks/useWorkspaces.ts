@@ -1,4 +1,6 @@
+import { queryKeys, staleTime } from '@/src/queries/keys';
 import { listWorkspaces } from '@/src/workspaceService';
-import { useRemoteData } from './useRemoteData';
+import { useServerQuery } from './useServerQuery';
 
-export const useWorkspaces = () => useRemoteData(listWorkspaces);
+export const useWorkspaces = () =>
+  useServerQuery(queryKeys.workspaces, listWorkspaces, staleTime.list);

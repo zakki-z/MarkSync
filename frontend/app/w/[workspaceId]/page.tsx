@@ -7,10 +7,10 @@ import { AppShell } from '@/src/components/AppShell';
 import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { DocumentList } from '@/src/components/DocumentList';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
-import { createDocument } from '@/src/documentService';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
 import { useEndSession } from '@/src/hooks/useEndSession';
 import { useWorkspaceDocuments } from '@/src/hooks/useWorkspaceDocuments';
+import { useCreateDocument } from '@/src/queries/mutations';
 
 export default function WorkspaceDashboard() {
   const router = useRouter();
@@ -18,6 +18,7 @@ export default function WorkspaceDashboard() {
   const workspaceId = Number(useParams<{ workspaceId: string }>().workspaceId);
   const { user, loading: userLoading } = useCurrentUser();
   const { data: documents, error, loading } = useWorkspaceDocuments(workspaceId);
+  const createDocument = useCreateDocument().mutateAsync;
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
@@ -30,9 +31,9 @@ export default function WorkspaceDashboard() {
     setCreating(true);
     setCreateError('');
     try {
-      const created = await createDocument(workspaceId, {
-        title: 'Untitled document',
-        markdown: '',
+      const created = await createDocument({
+        workspaceId,
+        draft: { title: 'Untitled document', markdown: '' },
       });
       router.push(`/w/${workspaceId}/d/${created.id}`);
     } catch (err: unknown) {

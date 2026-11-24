@@ -1,12 +1,14 @@
 'use client';
 
 import { useRef, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { loginUser, signupUser } from '@/src/authService';
 import { Brand, Button, Feedback } from '@/src/components/ui';
 
 export default function AuthPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -26,6 +28,7 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         await loginUser(email, password);
+        queryClient.clear();
         router.replace('/documents');
         router.refresh();
         return;

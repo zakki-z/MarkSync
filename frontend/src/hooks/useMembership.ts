@@ -1,7 +1,11 @@
-import { useCallback } from 'react';
+import { queryKeys, staleTime } from '@/src/queries/keys';
 import { getMembership } from '@/src/workspaceService';
-import { useRemoteData } from './useRemoteData';
+import { useServerQuery } from './useServerQuery';
 
 export function useMembership(workspaceId: number) {
-  return useRemoteData(useCallback(() => getMembership(workspaceId), [workspaceId]));
+  return useServerQuery(
+    queryKeys.membership(workspaceId),
+    () => getMembership(workspaceId),
+    staleTime.membership,
+  );
 }

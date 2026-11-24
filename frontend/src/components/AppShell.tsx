@@ -11,7 +11,7 @@ import { useEndSession } from '@/src/hooks/useEndSession';
 import { useMyInvitations } from '@/src/hooks/useMyInvitations';
 import { MAX_PINS, usePins } from '@/src/hooks/usePins';
 import { useWorkspaces } from '@/src/hooks/useWorkspaces';
-import { createWorkspace } from '@/src/workspaceService';
+import { useCreateWorkspace } from '@/src/queries/mutations';
 
 /** Sidebar with the workspace switcher, navigation and profile for signed-in users. */
 export function AppShell({
@@ -25,7 +25,8 @@ export function AppShell({
 }) {
   const router = useRouter();
   const endSession = useEndSession();
-  const { data: workspaces, setData: setWorkspaces } = useWorkspaces();
+  const { data: workspaces } = useWorkspaces();
+  const createWorkspace = useCreateWorkspace().mutateAsync;
   const invitations = useMyInvitations();
   const pendingCount = invitations.data?.length ?? 0;
   const [error, setError] = useState('');
@@ -40,7 +41,6 @@ export function AppShell({
     if (!name) return;
     try {
       const created = await createWorkspace(name);
-      setWorkspaces([created, ...(workspaces ?? [])]);
       router.push(`/w/${created.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unable to create workspace.');
