@@ -28,7 +28,13 @@ export default function WorkspaceInvitationsPage() {
   const [actionError, setActionError] = useState('');
 
   if (userLoading || membership.loading)
-    return <PageSkeleton variant="list" label="Loading invitations…" />;
+    return (
+      <PageSkeleton
+        variant="list"
+        label="Loading invitations…"
+        workspace={{ id: workspaceId, tab: 'invitations' }}
+      />
+    );
   if (!user || membership.error || !membership.data)
     return (
       <main className="loading-screen">

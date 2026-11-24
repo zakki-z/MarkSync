@@ -55,6 +55,18 @@ loads `CollaborativeEditor` (CodeMirror and its language packs, roughly 530 kB r
 libraries behind the same pattern, and give the placeholder the final element's box so nothing
 moves when it loads.
 
+## Loading states
+
+Signed-in pages show `PageSkeleton` while their data loads: the real sidebar, top bar and content
+frame, with placeholder bars whose heights are those of the elements that replace them (measured
+with an empty presence panel and two workspaces). The goal is no layout shift when data arrives.
+Where the real layout depends on data that is not known yet, reserve its room instead of letting
+it pop in: the sidebar list (`WorkspaceListPlaceholder`) and the presence panel
+(`PresencePanelPlaceholder`). If the sidebar, top bar or editor heading changes size, re-measure
+and update the numbers in `PageSkeleton.tsx`; check for shifts at 412 px and 1280 px wide with a
+`layout-shift` PerformanceObserver. Do not hold a page back to avoid a shift: a slow secondary
+request (membership, presence) must never keep a document from appearing.
+
 ## How to measure
 
 ```bash

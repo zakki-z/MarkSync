@@ -6,6 +6,7 @@ import type { AuthUser } from '@/src/authService';
 import { ApiError } from '@/src/apiClient';
 import type { DocumentDTO, DocumentDraft, DocumentVisibility } from '@/src/documentService';
 import { ConnectionStatus } from '@/src/components/ConnectionStatus';
+import { PresencePanelPlaceholder } from '@/src/components/PageSkeleton';
 import { CharacterCount, LivePreview } from '@/src/components/LiveMarkdown';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
 import { useCollaborativeDocument } from '@/src/hooks/useCollaborativeDocument';
@@ -40,7 +41,9 @@ function MemberPresence({
   userId: number;
   onSessionExpired: () => void;
 }) {
-  const { data: membership } = useMembership(workspaceId);
+  const { data: membership, loading } = useMembership(workspaceId);
+  // Keeps the panel's room while membership loads, so the editor does not jump down when it arrives.
+  if (loading) return <PresencePanelPlaceholder />;
   if (!membership) return null;
   return (
     <WorkspacePresencePanel

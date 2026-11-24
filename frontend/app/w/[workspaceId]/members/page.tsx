@@ -40,7 +40,13 @@ export default function MembersPage() {
   };
 
   if (userLoading || membership.loading || members.loading)
-    return <PageSkeleton variant="list" label="Loading members…" />;
+    return (
+      <PageSkeleton
+        variant="list"
+        label="Loading members…"
+        workspace={{ id: workspaceId, tab: 'members' }}
+      />
+    );
   const error = membership.error ?? members.error;
   if (!user || error || !membership.data || !members.data)
     return (

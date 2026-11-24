@@ -45,7 +45,13 @@ export default function WorkspaceDashboard() {
   };
 
   if (userLoading || loading)
-    return <PageSkeleton variant="documents" label="Loading your workspace…" />;
+    return (
+      <PageSkeleton
+        variant="documents"
+        label="Loading your workspace…"
+        workspace={{ id: workspaceId, tab: 'documents' }}
+      />
+    );
   if (!user || error || !documents)
     return (
       <main className="loading-screen">

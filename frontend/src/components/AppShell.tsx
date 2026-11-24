@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { AuthUser } from '@/src/authService';
 import { InvitationsProvider } from '@/src/components/InvitationsContext';
+import { WorkspaceListPlaceholder } from '@/src/components/PageSkeleton';
 import { Brand } from '@/src/components/ui';
 import { WorkspaceList } from '@/src/components/WorkspaceList';
 import { useEndSession } from '@/src/hooks/useEndSession';
@@ -26,7 +27,7 @@ export function AppShell({
 }) {
   const router = useRouter();
   const endSession = useEndSession();
-  const { data: workspaces } = useWorkspaces();
+  const { data: workspaces, loading: workspacesLoading } = useWorkspaces();
   const createWorkspace = useCreateWorkspace().mutateAsync;
   const invitations = useMyInvitations();
   const pendingCount = invitations.data?.length ?? 0;
@@ -66,6 +67,7 @@ export function AppShell({
             </span>
           )}
         </Link>
+        {workspacesLoading && <WorkspaceListPlaceholder />}
         {workspaces && (
           <WorkspaceList
             workspaces={workspaces}
