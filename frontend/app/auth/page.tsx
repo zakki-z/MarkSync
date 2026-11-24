@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { safeReturnPath } from '@/src/auth/authState';
 import { loginUser, signupUser } from '@/src/authService';
 import { Brand, Button, Feedback } from '@/src/components/ui';
 
@@ -26,7 +27,8 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         await loginUser(email, password);
-        router.replace('/documents');
+        const next = new URLSearchParams(window.location.search).get('next');
+        router.replace(safeReturnPath(next) ?? '/documents');
         router.refresh();
         return;
       }
