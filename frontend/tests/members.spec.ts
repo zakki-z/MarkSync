@@ -190,8 +190,9 @@ test.describe('members and invitations pages', () => {
     );
 
     await page.goto('/w/1/members');
-    await expect(page.getByRole('heading', { name: 'Unable to open members' })).toBeVisible();
-    await expect(page.getByText('Workspace not found: 1')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Not found' })).toBeVisible();
+    await expect(page.getByText('This workspace does not exist or was deleted.')).toBeVisible();
+    await expect(page.locator('aside.sidebar')).toBeVisible();
   });
 });
 

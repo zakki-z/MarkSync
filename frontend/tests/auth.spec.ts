@@ -118,7 +118,7 @@ test('server redirects missing and invalid sessions and clears invalid cookies',
     { name: 'marksync_session', value: 'invalid', url: 'http://localhost:3100', httpOnly: true },
   ]);
   await page.goto('/documents');
-  await expect(page).toHaveURL('/auth');
+  await expect(page).toHaveURL('/auth?next=%2Fdocuments');
   expect((await context.cookies()).some((cookie) => cookie.name === 'marksync_session')).toBe(
     false,
   );

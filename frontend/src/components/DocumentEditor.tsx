@@ -6,7 +6,7 @@ import type { AuthUser } from '@/src/authService';
 import { ApiError } from '@/src/apiClient';
 import type { DocumentDTO, DocumentDraft, DocumentVisibility } from '@/src/documentService';
 import { ConnectionStatus } from '@/src/components/ConnectionStatus';
-import { PresencePanelPlaceholder } from '@/src/components/PageSkeleton';
+import { PresencePanelPlaceholder } from '@/src/components/PageStates';
 import { CharacterCount, LivePreview } from '@/src/components/LiveMarkdown';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
 import { useCollaborativeDocument } from '@/src/hooks/useCollaborativeDocument';

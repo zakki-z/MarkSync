@@ -13,5 +13,6 @@ export function useServerQuery<T>(key: QueryKey, load: () => Promise<T>, staleTi
     error: query.error ?? undefined,
     loading: query.isPending,
     setData: (data: T) => client.setQueryData(key, data),
+    reload: () => void query.refetch(),
   };
 }

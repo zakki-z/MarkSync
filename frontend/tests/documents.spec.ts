@@ -274,7 +274,8 @@ test.describe('anonymous visitor', () => {
       route.fulfill({ status: 401, json: { detail: 'Unauthorized' } }),
     );
     await page.goto('/w/1/d/2');
-    await expect(page.getByText('This document is private. Sign in to view it.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'This document is private' })).toBeVisible();
+    await expect(page.getByText('Sign in to view it.')).toBeVisible();
   });
 
   test('the workspace dashboard still requires a session', async ({ request }) => {

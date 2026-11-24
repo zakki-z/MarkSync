@@ -1,10 +1,12 @@
+import { apiRequest } from './apiClient';
+
 export type AuthUser = { id: number; email: string; role: string };
 
 type Credentials = { email: string; password: string; username?: string };
 
 async function authRequest(action: string, credentials?: Credentials) {
   const response = await fetch(`/api/auth/${action}`, {
-    method: action === 'me' ? 'GET' : 'POST',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: credentials ? JSON.stringify(credentials) : undefined,
     cache: 'no-store',
@@ -22,5 +24,5 @@ export const loginUser = (email: string, password: string) =>
   authRequest('login', { email, password });
 export const signupUser = (email: string, password: string, username?: string) =>
   authRequest('signup', { email, password, ...(username && { username }) });
-export const getCurrentUser = (): Promise<AuthUser> => authRequest('me');
+export const getCurrentUser = (): Promise<AuthUser> => apiRequest<AuthUser>('/api/auth/me');
 export const logoutUser = (): Promise<void> => authRequest('logout');

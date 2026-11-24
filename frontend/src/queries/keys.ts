@@ -3,7 +3,6 @@
  * invalidation of ['workspaces'] reaches everything that belongs to a workspace.
  */
 export const queryKeys = {
-  me: ['me'] as const,
   workspaces: ['workspaces'] as const,
   myInvitations: ['invitations', 'mine'] as const,
   membership: (workspaceId: number) => ['workspaces', workspaceId, 'membership'] as const,
@@ -20,7 +19,6 @@ export const queryKeys = {
  * at once and revalidated in the background once it is older than this.
  */
 export const staleTime = {
-  session: 60_000,
   list: 30_000,
   document: 30_000,
   membership: 30_000,

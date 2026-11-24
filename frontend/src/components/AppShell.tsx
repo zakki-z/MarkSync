@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { AuthUser } from '@/src/authService';
 import { InvitationsProvider } from '@/src/components/InvitationsContext';
-import { WorkspaceListPlaceholder } from '@/src/components/PageSkeleton';
+import { WorkspaceListPlaceholder } from '@/src/components/PageStates';
 import { Brand } from '@/src/components/ui';
 import { WorkspaceList } from '@/src/components/WorkspaceList';
 import { useEndSession } from '@/src/hooks/useEndSession';
