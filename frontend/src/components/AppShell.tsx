@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { AuthUser } from '@/src/authService';
 import { InvitationsProvider } from '@/src/components/InvitationsContext';
+import { WorkspaceListPlaceholder } from '@/src/components/PageStates';
 import { Brand } from '@/src/components/ui';
 import { WorkspaceList } from '@/src/components/WorkspaceList';
 import { useEndSession } from '@/src/hooks/useEndSession';
 import { useMyInvitations } from '@/src/hooks/useMyInvitations';
 import { MAX_PINS, usePins } from '@/src/hooks/usePins';
+import { usePrefetch } from '@/src/hooks/usePrefetch';
 import { useWorkspaces } from '@/src/hooks/useWorkspaces';
-import { createWorkspace } from '@/src/workspaceService';
+import { useCreateWorkspace } from '@/src/queries/mutations';
 
 /** Sidebar with the workspace switcher, navigation and profile for signed-in users. */
 export function AppShell({
@@ -25,11 +27,13 @@ export function AppShell({
 }) {
   const router = useRouter();
   const endSession = useEndSession();
-  const { data: workspaces, setData: setWorkspaces } = useWorkspaces();
+  const { data: workspaces, loading: workspacesLoading } = useWorkspaces();
+  const createWorkspace = useCreateWorkspace().mutateAsync;
   const invitations = useMyInvitations();
   const pendingCount = invitations.data?.length ?? 0;
   const [error, setError] = useState('');
   const pins = usePins(`marksync:pins:workspaces:${user.id}`);
+  const prefetch = usePrefetch();
 
   const togglePin = (id: number) => {
     setError(pins.toggle(id) ? '' : `You can pin up to ${MAX_PINS} workspaces. Unpin one first.`);
@@ -40,7 +44,6 @@ export function AppShell({
     if (!name) return;
     try {
       const created = await createWorkspace(name);
-      setWorkspaces([created, ...(workspaces ?? [])]);
       router.push(`/w/${created.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unable to create workspace.');
@@ -64,12 +67,14 @@ export function AppShell({
             </span>
           )}
         </Link>
+        {workspacesLoading && <WorkspaceListPlaceholder />}
         {workspaces && (
           <WorkspaceList
             workspaces={workspaces}
             activeId={activeWorkspaceId}
             pinned={pins.pinned}
             onTogglePin={togglePin}
+            onPrefetch={prefetch.workspace}
           />
         )}
         {error && (

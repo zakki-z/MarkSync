@@ -7,8 +7,8 @@ import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { DocumentList } from '@/src/components/DocumentList';
 import { ContentSkeleton, LoadError } from '@/src/components/PageStates';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
-import { createDocument } from '@/src/documentService';
 import { useWorkspaceDocuments } from '@/src/hooks/useWorkspaceDocuments';
+import { useCreateDocument } from '@/src/queries/mutations';
 
 export default function WorkspaceDashboard() {
   const router = useRouter();
@@ -16,6 +16,7 @@ export default function WorkspaceDashboard() {
   const user = useUser();
   const workspaceId = Number(useParams<{ workspaceId: string }>().workspaceId);
   const documents = useWorkspaceDocuments(workspaceId);
+  const createDocument = useCreateDocument().mutateAsync;
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
@@ -23,9 +24,9 @@ export default function WorkspaceDashboard() {
     setCreating(true);
     setCreateError('');
     try {
-      const created = await createDocument(workspaceId, {
-        title: 'Untitled document',
-        markdown: '',
+      const created = await createDocument({
+        workspaceId,
+        draft: { title: 'Untitled document', markdown: '' },
       });
       router.push(`/w/${workspaceId}/d/${created.id}`);
     } catch (err: unknown) {
@@ -52,7 +53,7 @@ export default function WorkspaceDashboard() {
         </div>
       </header>
       {documents.loading ? (
-        <ContentSkeleton label="Loading documents…" />
+        <ContentSkeleton variant="documents" label="Loading documents…" />
       ) : documents.error || !documents.data ? (
         <LoadError
           error={documents.error ?? new Error('Unable to load documents.')}

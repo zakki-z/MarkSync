@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 /**
  * A deliberately small, safe Markdown subset for the walking skeleton.
@@ -42,7 +42,8 @@ function inlineMarkup(text: string): React.ReactNode[] {
   return parts;
 }
 
-export function MarkdownPreview({ markdown }: { markdown: string }) {
+/** Memoised: the same text never parses again, whatever re-renders around it. */
+export const MarkdownPreview = memo(function MarkdownPreview({ markdown }: { markdown: string }) {
   if (!markdown.trim()) {
     return <p className="preview-empty">Your Markdown preview will appear here as you type.</p>;
   }
@@ -146,4 +147,4 @@ export function MarkdownPreview({ markdown }: { markdown: string }) {
     else index++; // Always advance, even for malformed Markdown.
   }
   return <article className="markdown-content">{nodes}</article>;
-}
+});

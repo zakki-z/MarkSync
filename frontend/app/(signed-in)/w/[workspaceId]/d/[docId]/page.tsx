@@ -38,7 +38,7 @@ export default function DocumentPage() {
 
   let content: React.ReactNode;
   if (loading) {
-    content = <ContentSkeleton label="Loading document…" />;
+    content = <ContentSkeleton variant="document" label="Loading document…" />;
   } else if (!document) {
     const status = error instanceof ApiError ? error.status : undefined;
     content =

@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { guardView, signInPath } from '@/src/auth/authState';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { AppShell } from '@/src/components/AppShell';
 import { SessionCheckFailed, ShellSkeleton } from '@/src/components/PageStates';
+import { prefetchDocumentData, prefetchWorkspace } from '@/src/queries/prefetch';
 
 /**
  * Route guard and persistent shell for every signed-in screen. Pages render inside the shell and
@@ -17,6 +19,17 @@ export function SignedInFrame({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams<{ workspaceId?: string; docId?: string }>();
+  const client = useQueryClient();
+
+  // Pages render only once the session is known, so their requests would wait for the identity
+  // check. The page being opened is known from the URL: ask for its data now, in parallel. A
+  // request the session cannot make fails exactly as the page's own would.
+  const entry = useRef(params);
+  useEffect(() => {
+    const { workspaceId, docId } = entry.current;
+    if (docId) prefetchDocumentData(client, Number(docId));
+    else if (workspaceId) prefetchWorkspace(client, Number(workspaceId));
+  }, [client]);
   const view = guardView(state, params.docId !== undefined);
 
   useEffect(() => {

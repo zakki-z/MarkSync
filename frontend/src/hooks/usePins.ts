@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 export const MAX_PINS = 3;
 
@@ -20,17 +20,22 @@ function load(key: string): number[] {
 export function usePins(key: string) {
   const [pinned, setPinned] = useState(() => load(key));
 
-  const toggle = (id: number): boolean => {
-    const next = pinned.includes(id) ? pinned.filter((pin) => pin !== id) : [...pinned, id];
-    if (next.length > MAX_PINS) return false;
-    setPinned(next);
-    try {
-      localStorage.setItem(key, JSON.stringify(next));
-    } catch {
-      // Pins still work for this page view when storage is unavailable.
-    }
-    return true;
-  };
+  // Both change only when the pins do, so rows that receive them can skip re-rendering.
+  const toggle = useCallback(
+    (id: number): boolean => {
+      const next = pinned.includes(id) ? pinned.filter((pin) => pin !== id) : [...pinned, id];
+      if (next.length > MAX_PINS) return false;
+      setPinned(next);
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        // Pins still work for this page view when storage is unavailable.
+      }
+      return true;
+    },
+    [key, pinned],
+  );
+  const isPinned = useCallback((id: number) => pinned.includes(id), [pinned]);
 
-  return { pinned, isPinned: (id: number) => pinned.includes(id), toggle };
+  return { pinned, isPinned, toggle };
 }

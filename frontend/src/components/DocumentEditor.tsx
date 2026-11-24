@@ -1,21 +1,27 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import type { AuthUser } from '@/src/authService';
 import { ApiError } from '@/src/apiClient';
-import {
-  deleteDocument,
-  updateDocument,
-  type DocumentDTO,
-  type DocumentDraft,
-  type DocumentVisibility,
-} from '@/src/documentService';
-import { CollaborativeEditor } from '@/src/components/CollaborativeEditor';
+import type { DocumentDTO, DocumentDraft, DocumentVisibility } from '@/src/documentService';
 import { ConnectionStatus } from '@/src/components/ConnectionStatus';
+import { PresencePanelPlaceholder } from '@/src/components/PageStates';
+import { CharacterCount, LivePreview } from '@/src/components/LiveMarkdown';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
 import { useCollaborativeDocument } from '@/src/hooks/useCollaborativeDocument';
 import { useMembership } from '@/src/hooks/useMembership';
-import { MarkdownPreview } from '@/src/MarkdownPreview';
+import { useDeleteDocument, useUpdateDocument } from '@/src/queries/mutations';
+
+/**
+ * CodeMirror and its language packs are about half of the document route's JavaScript. They load
+ * only when an editable view is shown, so reading, previewing and the page shell do not wait for
+ * them. The placeholder is the editor's own host box, so nothing moves when the editor arrives.
+ */
+const CollaborativeEditor = dynamic(
+  () => import('@/src/components/CollaborativeEditor').then((module) => module.CollaborativeEditor),
+  { ssr: false, loading: () => <div className="markdown-editor cm-host" aria-busy="true" /> },
+);
 
 type Props = {
   document: DocumentDTO;
@@ -35,7 +41,9 @@ function MemberPresence({
   userId: number;
   onSessionExpired: () => void;
 }) {
-  const { data: membership } = useMembership(workspaceId);
+  const { data: membership, loading } = useMembership(workspaceId);
+  // Keeps the panel's room while membership loads, so the editor does not jump down when it arrives.
+  if (loading) return <PresencePanelPlaceholder />;
   if (!membership) return null;
   return (
     <WorkspacePresencePanel
@@ -56,6 +64,8 @@ const toDraft = (doc: DocumentDTO): DocumentDraft => ({
  * visibility are saved through the REST API; the Markdown is edited live through collaboration.
  */
 export function DocumentEditor({ document: initial, user, onDeleted, onSessionExpired }: Props) {
+  const updateDocument = useUpdateDocument().mutateAsync;
+  const deleteDocument = useDeleteDocument().mutateAsync;
   const mutationPending = useRef(false);
   const [saved, setSaved] = useState(initial);
   const [draft, setDraft] = useState(toDraft(initial));
@@ -71,10 +81,11 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
   const original = toDraft(saved);
   const dirty = draft.title !== original.title || draft.visibility !== original.visibility;
   // Until the server's state has arrived, the REST copy (kept current by the server) is shown.
-  const markdown = snapshot?.hasSynced ? snapshot.markdown : saved.markdown;
+  // The text itself is read by the leaves below, never here, so typing does not re-render this page.
+  const synced = snapshot?.hasSynced === true;
   // The server has the last word on editing: it can withdraw it while the page is open.
-  const editable = !readOnly && snapshot?.hasSynced === true && snapshot.canEdit === true;
-  const permissionLost = !readOnly && snapshot?.hasSynced === true && snapshot.canEdit === false;
+  const editable = !readOnly && synced && snapshot?.canEdit === true;
+  const permissionLost = !readOnly && synced && snapshot?.canEdit === false;
 
   useEffect(() => {
     if (!dirty) return;
@@ -109,7 +120,11 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
       return;
     }
     return run(async () => {
-      const updated = await updateDocument(saved.id, { ...draft, title: draft.title.trim() });
+      const updated = await updateDocument({
+        id: saved.id,
+        workspaceId: saved.workspaceId,
+        draft: { ...draft, title: draft.title.trim() },
+      });
       // The response carries the stored seed copy of the Markdown, which is not the live text.
       setSaved({ ...updated, markdown: saved.markdown });
       setDraft(toDraft(updated));
@@ -120,7 +135,7 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
   const remove = () => {
     if (!window.confirm('Delete this document permanently?')) return;
     return run(async () => {
-      await deleteDocument(saved.id);
+      await deleteDocument({ id: saved.id, workspaceId: saved.workspaceId });
       onDeleted();
     }, 'Unable to delete document.');
   };
@@ -238,12 +253,12 @@ export function DocumentEditor({ document: initial, user, onDeleted, onSessionEx
             )
           ) : (
             <div className="markdown-preview">
-              <MarkdownPreview markdown={markdown} />
+              <LivePreview collab={live?.collab} live={synced} fallback={saved.markdown} />
             </div>
           )}
         </div>
         <div className="editor-status">
-          <span>Markdown · {markdown.length.toLocaleString()} characters</span>
+          <CharacterCount collab={live?.collab} live={synced} fallback={saved.markdown} />
           {snapshot && (
             <span className="status-group">
               <ConnectionStatus status={snapshot.status} />

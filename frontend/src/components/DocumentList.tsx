@@ -1,11 +1,52 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { DocumentDTO } from '@/src/documentService';
 import { PinButton } from '@/src/components/PinButton';
 import { prettyDate } from '@/src/format';
 import { MAX_PINS, usePins } from '@/src/hooks/usePins';
+import { usePrefetch } from '@/src/hooks/usePrefetch';
+
+type RowProps = {
+  workspaceId: number;
+  doc: DocumentDTO;
+  pinned: boolean;
+  onTogglePin: (id: number) => void;
+  onPrefetch: (workspaceId: number, id: number) => void;
+};
+
+/** Memoised so that typing in the search box only re-renders rows that appear or change. */
+const DocumentRow = memo(function DocumentRow({
+  workspaceId,
+  doc,
+  pinned,
+  onTogglePin,
+  onPrefetch,
+}: RowProps) {
+  return (
+    <div className="document-row">
+      <Link
+        href={`/w/${workspaceId}/d/${doc.id}`}
+        className="document-item"
+        onMouseEnter={() => onPrefetch(workspaceId, doc.id)}
+        onFocus={() => onPrefetch(workspaceId, doc.id)}
+      >
+        <span className="document-icon" aria-hidden="true">
+          ▤
+        </span>
+        <span className="document-info">
+          <strong>{doc.title}</strong>
+          <small>
+            {prettyDate(doc.updatedAt || doc.createdAt)}
+            {doc.visibility === 'PUBLIC' ? ' · Public' : ''}
+          </small>
+        </span>
+      </Link>
+      <PinButton label={doc.title} pinned={pinned} onClick={() => onTogglePin(doc.id)} />
+    </div>
+  );
+});
 
 export function DocumentList({
   workspaceId,
@@ -19,17 +60,22 @@ export function DocumentList({
   const [search, setSearch] = useState('');
   const [notice, setNotice] = useState('');
   const pins = usePins(`marksync:pins:documents:${userId}:${workspaceId}`);
+  const prefetch = usePrefetch();
+  const { isPinned, toggle } = pins;
   const filtered = useMemo(
     () =>
       documents
         .filter((doc) => doc.title.toLowerCase().includes(search.trim().toLowerCase()))
         // Array.sort is stable, so pinned documents keep the API's recency order among themselves.
-        .sort((a, b) => Number(pins.isPinned(b.id)) - Number(pins.isPinned(a.id))),
-    [documents, search, pins],
+        .sort((a, b) => Number(isPinned(b.id)) - Number(isPinned(a.id))),
+    [documents, search, isPinned],
   );
 
-  const togglePin = (id: number) =>
-    setNotice(pins.toggle(id) ? '' : `You can pin up to ${MAX_PINS} documents. Unpin one first.`);
+  const togglePin = useCallback(
+    (id: number) =>
+      setNotice(toggle(id) ? '' : `You can pin up to ${MAX_PINS} documents. Unpin one first.`),
+    [toggle],
+  );
 
   return (
     <>
@@ -55,25 +101,14 @@ export function DocumentList({
           </p>
         )}
         {filtered.map((doc) => (
-          <div key={doc.id} className="document-row">
-            <Link href={`/w/${workspaceId}/d/${doc.id}`} className="document-item">
-              <span className="document-icon" aria-hidden="true">
-                ▤
-              </span>
-              <span className="document-info">
-                <strong>{doc.title}</strong>
-                <small>
-                  {prettyDate(doc.updatedAt || doc.createdAt)}
-                  {doc.visibility === 'PUBLIC' ? ' · Public' : ''}
-                </small>
-              </span>
-            </Link>
-            <PinButton
-              label={doc.title}
-              pinned={pins.isPinned(doc.id)}
-              onClick={() => togglePin(doc.id)}
-            />
-          </div>
+          <DocumentRow
+            key={doc.id}
+            workspaceId={workspaceId}
+            doc={doc}
+            pinned={isPinned(doc.id)}
+            onTogglePin={togglePin}
+            onPrefetch={prefetch.document}
+          />
         ))}
       </div>
     </>

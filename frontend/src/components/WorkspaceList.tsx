@@ -7,10 +7,12 @@ type Props = {
   activeId?: number;
   pinned: number[];
   onTogglePin: (id: number) => void;
+  /** Called when the pointer or keyboard reaches a workspace link, before it is followed. */
+  onPrefetch: (id: number) => void;
 };
 
 /** Workspaces as a conversation-style list: pinned first, then the rest. */
-export function WorkspaceList({ workspaces, activeId, pinned, onTogglePin }: Props) {
+export function WorkspaceList({ workspaces, activeId, pinned, onTogglePin, onPrefetch }: Props) {
   const pinnedWorkspaces = pinned.flatMap((id) => workspaces.find((w) => w.id === id) ?? []);
   const others = workspaces.filter((workspace) => !pinned.includes(workspace.id));
 
@@ -20,6 +22,8 @@ export function WorkspaceList({ workspaces, activeId, pinned, onTogglePin }: Pro
         href={`/w/${workspace.id}`}
         className="list-row-link"
         aria-current={workspace.id === activeId ? 'page' : undefined}
+        onMouseEnter={() => onPrefetch(workspace.id)}
+        onFocus={() => onPrefetch(workspace.id)}
       >
         {workspace.name}
       </Link>

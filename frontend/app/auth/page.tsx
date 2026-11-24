@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { safeReturnPath } from '@/src/auth/authState';
 import { loginUser, signupUser } from '@/src/authService';
@@ -8,6 +9,7 @@ import { Brand, Button, Feedback } from '@/src/components/ui';
 
 export default function AuthPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -27,6 +29,8 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         await loginUser(email, password);
+        // A session that ended without signing out (401) leaves its cache behind: drop it.
+        queryClient.clear();
         const next = new URLSearchParams(window.location.search).get('next');
         router.replace(safeReturnPath(next) ?? '/documents');
         router.refresh();

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { ConnectionStatus } from '@/src/components/ConnectionStatus';
 import { OnlineUsers } from '@/src/components/OnlineUsers';
 import { WorkspaceMessagePanel } from '@/src/components/WorkspaceMessagePanel';
@@ -11,8 +12,16 @@ type Props = {
   onSessionExpired: () => void;
 };
 
-/** Who is online in the workspace, the connection state, and a small message box. */
-export function WorkspacePresencePanel({ workspaceId, currentUserId, onSessionExpired }: Props) {
+/**
+ * Who is online in the workspace, the connection state, and a small message box. Presence changes
+ * stay inside this component's own state; memo keeps edits to the page around it (the title, the
+ * document text) from re-rendering it.
+ */
+export const WorkspacePresencePanel = memo(function WorkspacePresencePanel({
+  workspaceId,
+  currentUserId,
+  onSessionExpired,
+}: Props) {
   const { status, users, messages, send } = useWorkspacePresence(workspaceId, onSessionExpired);
   return (
     <section className="panel presence-panel" aria-labelledby="presence-heading">
@@ -34,4 +43,4 @@ export function WorkspacePresencePanel({ workspaceId, currentUserId, onSessionEx
       />
     </section>
   );
-}
+});

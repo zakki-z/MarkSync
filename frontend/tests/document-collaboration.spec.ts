@@ -201,8 +201,8 @@ test.describe('connecting and syncing', () => {
       canEdit: true,
       synced: true,
       hasSynced: true,
-      markdown: '# Existing',
     });
+    expect(collab.getText()).toBe('# Existing');
     expect(service.text).toBe('# Existing');
   });
 
@@ -216,7 +216,38 @@ test.describe('connecting and syncing', () => {
     expect(service.text).toBe('local ');
 
     service.remoteEdit(socket, (t) => t.insert(t.length, 'remote'));
-    expect(collab.getSnapshot().markdown).toBe('local remote');
+    expect(collab.getText()).toBe('local remote');
+  });
+
+  test('typing reaches text subscribers but never re-notifies the state snapshot', () => {
+    const { collab, service, connect } = setup();
+    collab.start();
+    const socket = connect();
+    let snapshotChanges = 0;
+    let textChanges = 0;
+    collab.subscribe(() => snapshotChanges++);
+    const unsubscribe = collab.subscribeText(() => textChanges++);
+
+    collab.text.insert(0, 'local ');
+    service.process(socket);
+    service.remoteEdit(socket, (t) => t.insert(t.length, 'remote'));
+    expect(textChanges).toBe(2);
+    expect(snapshotChanges).toBe(0);
+    expect(collab.getText()).toBe('local remote');
+
+    unsubscribe();
+    collab.text.insert(0, '>');
+    expect(textChanges).toBe(2);
+  });
+
+  test('the text is read once per change, however many components ask', () => {
+    const { collab } = setup();
+    collab.start();
+    collab.text.insert(0, 'abc');
+    const first = collab.getText();
+    expect(collab.getText()).toBe(first);
+    collab.text.insert(3, 'd');
+    expect(collab.getText()).toBe('abcd');
   });
 
   test('undo reverts only the local changes, never someone else’s', () => {

@@ -1,14 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useSharedInvitations } from '@/src/components/InvitationsContext';
 import { MyInvitationList } from '@/src/components/MyInvitationList';
 import { ContentSkeleton, LoadError } from '@/src/components/PageStates';
+import { queryKeys } from '@/src/queries/keys';
 import { acceptInvitation, declineInvitation, type Invitation } from '@/src/workspaceService';
 
 function MyInvitations() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: invitations, error, loading, setData, reload } = useSharedInvitations();
   const [busyId, setBusyId] = useState<number>();
   const [actionError, setActionError] = useState('');
@@ -19,7 +22,11 @@ function MyInvitations() {
     try {
       await (accept ? acceptInvitation : declineInvitation)(invitation.id);
       setData((invitations ?? []).filter((i) => i.id !== invitation.id));
-      if (accept) router.push(`/w/${invitation.workspaceId}`);
+      if (accept) {
+        // Joining adds a workspace to the sidebar.
+        await queryClient.invalidateQueries({ queryKey: queryKeys.workspaces, exact: true });
+        router.push(`/w/${invitation.workspaceId}`);
+      }
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Unable to answer the invitation.');
     }

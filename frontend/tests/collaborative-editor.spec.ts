@@ -65,6 +65,21 @@ test.describe('collaborative editor', () => {
     await expect(page.locator('.cm-ySelectionInfo')).toHaveText('bob');
   });
 
+  test('the preview of a very long document still catches up with the shared text', async ({
+    page,
+  }) => {
+    const filler = 'A line of text that makes the document long.\n\n'.repeat(2500);
+    const collaboration = await mockCollaboration(page, { markdown: `# Long\n\n${filler}` });
+    await openDocument(page);
+    await page.getByRole('button', { name: 'Preview' }).click();
+    await expect(page.locator('.markdown-content h1')).toHaveText('Long');
+
+    for (const word of ['one', 'two', 'three']) {
+      collaboration.edit((text) => text.insert(0, `# ${word}\n\n`));
+    }
+    await expect(page.locator('.markdown-content h1').first()).toHaveText('three');
+  });
+
   test('the live preview follows the shared text', async ({ page }) => {
     const collaboration = await mockCollaboration(page, { markdown: '# First' });
     await openDocument(page);
