@@ -85,3 +85,48 @@ test.describe('server-state cache', () => {
     expect(requests.documents).toBe(2);
   });
 });
+
+test.describe('prefetching', () => {
+  test('hovering a document loads it before the click and opening it reuses that', async ({
+    page,
+  }) => {
+    await signIn(page);
+    let documentRequests = 0;
+    await page.route('**/api/documents/2', (route) => {
+      documentRequests++;
+      return route.fulfill({ json: document(2, 'Original') });
+    });
+    await page.goto('/w/1');
+    const link = page.getByRole('link', { name: /Original/ });
+    await expect(link).toBeVisible();
+    expect(documentRequests).toBe(0);
+
+    await link.hover();
+    await expect.poll(() => documentRequests).toBe(1);
+
+    await link.click();
+    await expect(page).toHaveURL('/w/1/d/2');
+    await expect(page.getByLabel('Document title')).toHaveValue('Original');
+    expect(documentRequests).toBe(1);
+  });
+
+  test('focusing a workspace in the sidebar loads its documents', async ({ page }) => {
+    await signIn(page);
+    await page.route('**/api/workspaces', (route) =>
+      route.fulfill({
+        json: [workspace, { id: 2, name: 'Team', visibility: 'PRIVATE', ownerId: '7' }],
+      }),
+    );
+    let teamDocuments = 0;
+    await page.route('**/api/workspaces/2/documents', (route) => {
+      teamDocuments++;
+      return route.fulfill({ json: [] });
+    });
+    await page.goto('/w/1');
+    await expect(page.getByRole('link', { name: 'Team' })).toBeVisible();
+    expect(teamDocuments).toBe(0);
+
+    await page.getByRole('link', { name: 'Team' }).focus();
+    await expect.poll(() => teamDocuments).toBe(1);
+  });
+});

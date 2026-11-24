@@ -6,6 +6,7 @@ import type { DocumentDTO } from '@/src/documentService';
 import { PinButton } from '@/src/components/PinButton';
 import { prettyDate } from '@/src/format';
 import { MAX_PINS, usePins } from '@/src/hooks/usePins';
+import { usePrefetch } from '@/src/hooks/usePrefetch';
 
 export function DocumentList({
   workspaceId,
@@ -19,6 +20,7 @@ export function DocumentList({
   const [search, setSearch] = useState('');
   const [notice, setNotice] = useState('');
   const pins = usePins(`marksync:pins:documents:${userId}:${workspaceId}`);
+  const prefetch = usePrefetch();
   const filtered = useMemo(
     () =>
       documents
@@ -56,7 +58,12 @@ export function DocumentList({
         )}
         {filtered.map((doc) => (
           <div key={doc.id} className="document-row">
-            <Link href={`/w/${workspaceId}/d/${doc.id}`} className="document-item">
+            <Link
+              href={`/w/${workspaceId}/d/${doc.id}`}
+              className="document-item"
+              onMouseEnter={() => prefetch.document(workspaceId, doc.id)}
+              onFocus={() => prefetch.document(workspaceId, doc.id)}
+            >
               <span className="document-icon" aria-hidden="true">
                 ▤
               </span>

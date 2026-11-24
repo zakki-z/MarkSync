@@ -10,6 +10,7 @@ import { WorkspaceList } from '@/src/components/WorkspaceList';
 import { useEndSession } from '@/src/hooks/useEndSession';
 import { useMyInvitations } from '@/src/hooks/useMyInvitations';
 import { MAX_PINS, usePins } from '@/src/hooks/usePins';
+import { usePrefetch } from '@/src/hooks/usePrefetch';
 import { useWorkspaces } from '@/src/hooks/useWorkspaces';
 import { useCreateWorkspace } from '@/src/queries/mutations';
 
@@ -31,6 +32,7 @@ export function AppShell({
   const pendingCount = invitations.data?.length ?? 0;
   const [error, setError] = useState('');
   const pins = usePins(`marksync:pins:workspaces:${user.id}`);
+  const prefetch = usePrefetch();
 
   const togglePin = (id: number) => {
     setError(pins.toggle(id) ? '' : `You can pin up to ${MAX_PINS} workspaces. Unpin one first.`);
@@ -70,6 +72,7 @@ export function AppShell({
             activeId={activeWorkspaceId}
             pinned={pins.pinned}
             onTogglePin={togglePin}
+            onPrefetch={prefetch.workspace}
           />
         )}
         {error && (
