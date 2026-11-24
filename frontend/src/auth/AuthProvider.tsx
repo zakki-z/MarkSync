@@ -67,3 +67,9 @@ export function useAuth(): AuthContextValue {
   if (!value) throw new Error('useAuth must be used inside AuthProvider');
   return value;
 }
+
+/** The signed-in user, or undefined for an anonymous visitor (only possible on public documents). */
+export function useUser() {
+  const { state } = useAuth();
+  return state.status === 'authenticated' ? state.user : undefined;
+}

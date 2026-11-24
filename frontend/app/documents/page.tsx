@@ -10,12 +10,14 @@ import { createWorkspace, listWorkspaces } from '@/src/workspaceService';
 export default function DocumentsEntry() {
   const router = useRouter();
   const endSession = useEndSession();
-  const started = useRef(false);
+  const started = useRef(-1);
+  const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+    // Runs once per attempt, even when React mounts effects twice in development.
+    if (started.current === attempt) return;
+    started.current = attempt;
     listWorkspaces()
       .then(async (workspaces) => workspaces[0] ?? createWorkspace('Personal'))
       .then((workspace) => router.replace(`/w/${workspace.id}`))
@@ -23,7 +25,7 @@ export default function DocumentsEntry() {
         if (err instanceof ApiError && err.status === 401) void endSession();
         else setError(err instanceof Error ? err.message : 'Unable to load your workspaces.');
       });
-  }, [router, endSession]);
+  }, [router, endSession, attempt]);
 
   if (!error)
     return (
@@ -36,7 +38,13 @@ export default function DocumentsEntry() {
       <div className="loading-error">
         <h1>Unable to open workspace</h1>
         <p>{error}</p>
-        <button className="button subtle" onClick={() => window.location.reload()}>
+        <button
+          className="button subtle"
+          onClick={() => {
+            setError('');
+            setAttempt((n) => n + 1);
+          }}
+        >
           Retry
         </button>
       </div>
