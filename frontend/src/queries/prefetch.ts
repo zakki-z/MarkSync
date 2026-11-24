@@ -7,12 +7,16 @@ import { queryKeys, staleTime } from './keys';
  * failure is ignored because the page makes the same request itself and shows its own error.
  * Data that is still fresh is not requested again.
  */
-export function prefetchDocument(client: QueryClient, documentId: number) {
+export function prefetchDocumentData(client: QueryClient, documentId: number) {
   void client.prefetchQuery({
     queryKey: queryKeys.document(documentId),
     queryFn: () => getDocument(documentId),
     staleTime: staleTime.document,
   });
+}
+
+export function prefetchDocument(client: QueryClient, documentId: number) {
+  prefetchDocumentData(client, documentId);
   // The editor is a separate chunk (see DocumentEditor); start downloading it with the data.
   void import('@/src/components/CollaborativeEditor').catch(() => undefined);
 }

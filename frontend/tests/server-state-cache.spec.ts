@@ -130,3 +130,45 @@ test.describe('prefetching', () => {
     await expect.poll(() => teamDocuments).toBe(1);
   });
 });
+
+test.describe('entering a page directly', () => {
+  test('asks for the document while the session is still being checked', async ({ page }) => {
+    await signIn(page);
+    const started: string[] = [];
+    await page.route('**/api/auth/me', async (route) => {
+      started.push('me');
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await route.fulfill({ json: { id: 7, email: 'student@sussex.ac.uk', role: 'user' } });
+    });
+    await page.route('**/api/documents/2', (route) => {
+      started.push('document');
+      return route.fulfill({ json: document(2, 'Original') });
+    });
+    await page.goto('/w/1/d/2');
+    await expect(page.getByLabel('Document title')).toHaveValue('Original');
+    // Both requests were in flight together: the document did not wait for the identity check.
+    expect(started.slice(0, 2).sort()).toEqual(['document', 'me']);
+  });
+
+  test('asks for the workspace documents while the session is still being checked', async ({
+    page,
+  }) => {
+    const requests = await signIn(page);
+    let documentsBeforeSession = 0;
+    let sessionKnown = false;
+    await page.route('**/api/auth/me', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      sessionKnown = true;
+      await route.fulfill({ json: { id: 7, email: 'student@sussex.ac.uk', role: 'user' } });
+    });
+    await page.route('**/api/workspaces/1/documents', (route) => {
+      if (!sessionKnown) documentsBeforeSession++;
+      requests.documents++;
+      return route.fulfill({ json: [document(2, 'Original')] });
+    });
+    await page.goto('/w/1');
+    await expect(page.getByRole('link', { name: /Original/ })).toBeVisible();
+    expect(documentsBeforeSession).toBe(1);
+    expect(requests.documents).toBe(1);
+  });
+});

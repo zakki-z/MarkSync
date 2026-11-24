@@ -76,14 +76,15 @@ Reading these numbers:
 
 ## After the performance work
 
-Same method and the same stub backend as above (commit `38e819d`, 2026-11-24). Lighthouse is the
-median of three mobile runs.
+Same method and the same stub backend as above, measured on the branch after merging `main` (which
+added the auth bootstrap, the persistent signed-in layout and the shared skeleton primitive; its
+code accounts for part of the JS growth below). Lighthouse is the median of three mobile runs.
 
 | Route                        | JS raw (before → after)  | JS gzip (before → after) | LCP (ms)      | TBT (ms)  | CLS             | Perf score |
 | ---------------------------- | ------------------------ | ------------------------ | ------------- | --------- | --------------- | ---------- |
-| `/auth`                      | 461,023 → 487,706        | 137,260 → 145,608        | 756 → 758     | 7 → 8     | 0 → 0           | 100 → 100  |
-| `/w/[workspaceId]`           | 482,430 → 525,082        | 144,611 → 158,457        | 766 → 2,493\* | 9 → 15    | 0.111 → 0       | 97 → 98    |
-| `/w/[workspaceId]/d/[docId]` | 1,138,017 → 653,837      | 363,882 → 197,349        | 3,592 → 2,664 | 74 → 56   | 0.278 → 0       | 76 → 97    |
+| `/auth`                      | 461,023 → 489,682        | 137,260 → 146,648        | 756 → 758     | 7 → 15    | 0 → 0           | 100 → 100  |
+| `/w/[workspaceId]`           | 482,430 → 559,286        | 144,611 → 170,132        | 766 → 2,538\* | 9 → 41    | 0.111 → 0       | 97 → 97    |
+| `/w/[workspaceId]/d/[docId]` | 1,138,017 → 687,838      | 363,882 → 209,101        | 3,592 → 2,882 | 74 → 82   | 0.278 → 0       | 76 → 95    |
 
 \* The dashboard LCP before was the "Loading your workspace…" text. A skeleton is not an LCP
 candidate, so LCP is now the first real content, which waits for the user and the document list
