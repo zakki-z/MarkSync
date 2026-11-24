@@ -204,7 +204,9 @@ describe('two authorized users in one workspace', () => {
     const tabB = client(port, 'token-ada');
     await Promise.all([observer.opened, tabA.opened, tabB.opened]);
     for (const peer of [observer, tabA, tabB]) peer.send({ type: 'join', workspaceId: WORKSPACE });
-    await observer.next(presenceOf('ada', 'bob'));
+    // Joins finish in any order (each waits for its own access check), so wait
+    // until every tab has joined; otherwise closing tabA can take ada offline.
+    await Promise.all([observer, tabA, tabB].map((peer) => peer.next(presenceOf('ada', 'bob'))));
     observer.frames.length = 0;
     tabA.ws.close();
     await tabA.closed;
