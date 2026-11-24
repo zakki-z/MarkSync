@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import type { AuthUser } from '@/src/authService';
 import { ApiError } from '@/src/apiClient';
@@ -10,12 +11,21 @@ import {
   type DocumentDraft,
   type DocumentVisibility,
 } from '@/src/documentService';
-import { CollaborativeEditor } from '@/src/components/CollaborativeEditor';
 import { ConnectionStatus } from '@/src/components/ConnectionStatus';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
 import { useCollaborativeDocument } from '@/src/hooks/useCollaborativeDocument';
 import { useMembership } from '@/src/hooks/useMembership';
 import { MarkdownPreview } from '@/src/MarkdownPreview';
+
+/**
+ * CodeMirror and its language packs are about half of the document route's JavaScript. They load
+ * only when an editable view is shown, so reading, previewing and the page shell do not wait for
+ * them. The placeholder is the editor's own host box, so nothing moves when the editor arrives.
+ */
+const CollaborativeEditor = dynamic(
+  () => import('@/src/components/CollaborativeEditor').then((module) => module.CollaborativeEditor),
+  { ssr: false, loading: () => <div className="markdown-editor cm-host" aria-busy="true" /> },
+);
 
 type Props = {
   document: DocumentDTO;
