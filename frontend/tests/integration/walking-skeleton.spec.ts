@@ -57,7 +57,7 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
 }) => {
   const email = `owner-${randomUUID()}@example.com`;
   await page.goto('/documents');
-  await expect(page).toHaveURL('/auth');
+  await expect(page).toHaveURL('/auth?next=%2Fdocuments');
   await signup(page, email);
   await login(page, email);
   const cookie = (await page.context().cookies()).find((item) => item.name === 'marksync_session');
@@ -190,7 +190,7 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL('/auth');
     await page.goto('/documents');
-    await expect(page).toHaveURL('/auth');
+    await expect(page).toHaveURL('/auth?next=%2Fdocuments');
     expect((await page.request.get(`/api/workspaces/${workspaceId}/documents`)).status()).toBe(401);
   } finally {
     await second.close();
@@ -219,7 +219,7 @@ test('authentication errors, invalid cookies, and mobile controls', async ({
     { name: 'marksync_session', value: 'invalid', url: baseURL!, httpOnly: true },
   ]);
   await page.goto('/documents');
-  await expect(page).toHaveURL('/auth');
+  await expect(page).toHaveURL('/auth?next=%2Fdocuments');
   expect((await context.cookies()).some((cookie) => cookie.name === 'marksync_session')).toBe(
     false,
   );

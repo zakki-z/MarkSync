@@ -2,15 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/src/components/AppShell';
 import { useSharedInvitations } from '@/src/components/InvitationsContext';
 import { MyInvitationList } from '@/src/components/MyInvitationList';
-import { useCurrentUser } from '@/src/hooks/useCurrentUser';
+import { ContentSkeleton, LoadError } from '@/src/components/PageStates';
 import { acceptInvitation, declineInvitation, type Invitation } from '@/src/workspaceService';
 
 function MyInvitations() {
   const router = useRouter();
-  const { data: invitations, error, loading, setData } = useSharedInvitations();
+  const { data: invitations, error, loading, setData, reload } = useSharedInvitations();
   const [busyId, setBusyId] = useState<number>();
   const [actionError, setActionError] = useState('');
 
@@ -27,17 +26,13 @@ function MyInvitations() {
     setBusyId(undefined);
   };
 
+  if (loading) return <ContentSkeleton label="Loading invitations…" />;
+  if (error) return <LoadError error={error} subject="invitations" onRetry={reload} />;
   return (
     <div className="editor-body">
       {actionError && (
         <div className="alert error" role="alert">
           {actionError}
-        </div>
-      )}
-      {loading && <p aria-live="polite">Loading invitations…</p>}
-      {error && (
-        <div className="alert error" role="alert">
-          {error.message}
         </div>
       )}
       {invitations && (
@@ -53,30 +48,14 @@ function MyInvitations() {
 }
 
 export default function InvitationsPage() {
-  const { user, loading } = useCurrentUser();
-  if (loading)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading…
-      </main>
-    );
-  if (!user)
-    return (
-      <main className="loading-screen">
-        <div className="loading-error">
-          <h1>Unable to open invitations</h1>
-          <p>Please sign in to continue.</p>
-        </div>
-      </main>
-    );
   return (
-    <AppShell user={user}>
+    <>
       <header className="workspace-topbar">
         <div className="workspace-location">
           <strong>My invitations</strong>
         </div>
       </header>
       <MyInvitations />
-    </AppShell>
+    </>
   );
 }

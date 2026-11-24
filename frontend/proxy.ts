@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { authenticate } from './src/server/documentsProxy';
 import { sessionCookie } from './src/server/session';
+import { signInPath } from './src/auth/authState';
 
 export async function proxy(request: NextRequest) {
   const auth = await authenticate(request);
   if ('error' in auth) {
     if (auth.error.status !== 401) return auth.error;
-    const response = NextResponse.redirect(new URL('/auth', request.url));
+    const { pathname, search } = request.nextUrl;
+    const response = NextResponse.redirect(new URL(signInPath(pathname + search), request.url));
     response.headers.set('Set-Cookie', sessionCookie('', 0));
     response.headers.set('Cache-Control', 'no-store');
     return response;

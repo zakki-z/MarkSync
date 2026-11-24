@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { AppShell } from '@/src/components/AppShell';
+import { useUser } from '@/src/auth/AuthProvider';
 import { MemberList } from '@/src/components/MemberList';
+import { ContentSkeleton, LoadError } from '@/src/components/PageStates';
 import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
-import { useCurrentUser } from '@/src/hooks/useCurrentUser';
 import { useMembers } from '@/src/hooks/useMembers';
 import { useMembership } from '@/src/hooks/useMembership';
 import {
@@ -19,8 +19,8 @@ import {
 /** Members of one workspace. Owners manage roles; every other role sees a read-only list. */
 export default function MembersPage() {
   const router = useRouter();
+  const user = useUser();
   const workspaceId = Number(useParams<{ workspaceId: string }>().workspaceId);
-  const { user, loading: userLoading } = useCurrentUser();
   const membership = useMembership(workspaceId);
   const members = useMembers(workspaceId);
   const canManage = membership.data?.canManageMembers ?? false;
@@ -34,26 +34,6 @@ export default function MembersPage() {
       setActionError(err instanceof Error ? err.message : fallback);
     }
   };
-
-  if (userLoading || membership.loading || members.loading)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading members…
-      </main>
-    );
-  const error = membership.error ?? members.error;
-  if (!user || error || !membership.data || !members.data)
-    return (
-      <main className="loading-screen">
-        <div className="loading-error">
-          <h1>Unable to open members</h1>
-          <p>{error?.message ?? 'Please sign in to continue.'}</p>
-          <button className="button subtle" onClick={() => router.replace('/documents')}>
-            Back to your workspaces
-          </button>
-        </div>
-      </main>
-    );
 
   const changeRole = (member: Member, role: Role) =>
     run(async () => {
@@ -71,29 +51,43 @@ export default function MembersPage() {
       router.push('/documents');
     }, 'Unable to leave the workspace.');
 
+  if (!user) return null;
+  const error = membership.error ?? members.error;
+  const retry = () => {
+    if (membership.error) membership.reload();
+    if (members.error) members.reload();
+  };
   return (
-    <AppShell user={user} activeWorkspaceId={workspaceId}>
+    <>
       <header className="workspace-topbar">
         <div className="workspace-location">
           <WorkspaceTabs workspaceId={workspaceId} current="members" />
-          <span className="readonly-badge">{membership.data.role.toLowerCase()}</span>
+          {membership.data && (
+            <span className="readonly-badge">{membership.data.role.toLowerCase()}</span>
+          )}
         </div>
       </header>
-      <div className="editor-body">
-        {actionError && (
-          <div className="alert error" role="alert">
-            {actionError}
-          </div>
-        )}
-        <MemberList
-          members={members.data}
-          currentUserId={String(user.id)}
-          canManage={canManage}
-          onChangeRole={changeRole}
-          onRemove={remove}
-          onLeave={leave}
-        />
-      </div>
-    </AppShell>
+      {error ? (
+        <LoadError error={error} subject="members" onRetry={retry} />
+      ) : !membership.data || !members.data ? (
+        <ContentSkeleton label="Loading members…" />
+      ) : (
+        <div className="editor-body">
+          {actionError && (
+            <div className="alert error" role="alert">
+              {actionError}
+            </div>
+          )}
+          <MemberList
+            members={members.data}
+            currentUserId={String(user.id)}
+            canManage={canManage}
+            onChangeRole={changeRole}
+            onRemove={remove}
+            onLeave={leave}
+          />
+        </div>
+      )}
+    </>
   );
 }
