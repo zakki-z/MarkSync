@@ -73,3 +73,37 @@ Reading these numbers:
 
 `bun run lint`, `bun run typecheck`, `bun run format:check`, `bun run build`, `bun run test:e2e`
 (Playwright, Chromium).
+
+## After the performance work
+
+Same method and the same stub backend as above (commit `38e819d`, 2026-11-24). Lighthouse is the
+median of three mobile runs.
+
+| Route                        | JS raw (before → after)  | JS gzip (before → after) | LCP (ms)      | TBT (ms)  | CLS             | Perf score |
+| ---------------------------- | ------------------------ | ------------------------ | ------------- | --------- | --------------- | ---------- |
+| `/auth`                      | 461,023 → 487,706        | 137,260 → 145,608        | 756 → 758     | 7 → 8     | 0 → 0           | 100 → 100  |
+| `/w/[workspaceId]`           | 482,430 → 525,082        | 144,611 → 158,457        | 766 → 2,493\* | 9 → 15    | 0.111 → 0       | 97 → 98    |
+| `/w/[workspaceId]/d/[docId]` | 1,138,017 → 653,837      | 363,882 → 197,349        | 3,592 → 2,664 | 74 → 56   | 0.278 → 0       | 76 → 97    |
+
+\* The dashboard LCP before was the "Loading your workspace…" text. A skeleton is not an LCP
+candidate, so LCP is now the first real content, which waits for the user and the document list
+(about 2.5 s with 40 ms of simulated latency per call and mobile throttling). The page is not
+slower; the measured element changed.
+
+Largest chunk: 659,568 raw / 220,466 gzip → 535,625 raw / 183,066 gzip (now the lazily loaded
+editor). Total JS in `.next/static/chunks`: 1,340,023 / 437,246 → 1,359,519 / 440,951 raw / gzip.
+Shared stylesheet: 45,960 → 46,531 bytes raw (the skeleton's utilities).
+
+The editor's CodeMirror, Lezer and Yjs code (about 530 kB raw) no longer loads with the document
+route; it is fetched as its own chunk when an editable view is shown, and warmed up when the
+pointer or keyboard reaches a document link. Every other route is about 8 to 12 kB gzip larger,
+which is TanStack Query.
+
+Render counts in a production build (temporary counters, not committed):
+
+| Action                                      | Before                              | After                |
+| ------------------------------------------- | ----------------------------------- | -------------------- |
+| 20 remote edits on an open document         | editor page 20, presence panel 20   | 0, 0                 |
+| 10 local keystrokes in the editor           | editor page 10, presence panel 10   | 0, 0                 |
+| 10 keystrokes in the title field            | editor page 10, presence panel 10   | editor page 10, panel 0 |
+| 5 search keystrokes over 60 documents       | 251 row renders                     | 0                    |
