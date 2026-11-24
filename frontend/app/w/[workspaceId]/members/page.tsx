@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { AppShell } from '@/src/components/AppShell';
 import { MemberList } from '@/src/components/MemberList';
+import { PageSkeleton } from '@/src/components/PageSkeleton';
 import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
 import { useMembers } from '@/src/hooks/useMembers';
@@ -39,11 +40,7 @@ export default function MembersPage() {
   };
 
   if (userLoading || membership.loading || members.loading)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading members…
-      </main>
-    );
+    return <PageSkeleton variant="list" label="Loading members…" />;
   const error = membership.error ?? members.error;
   if (!user || error || !membership.data || !members.data)
     return (

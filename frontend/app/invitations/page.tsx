@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/src/components/AppShell';
+import { PageSkeleton } from '@/src/components/PageSkeleton';
 import { useSharedInvitations } from '@/src/components/InvitationsContext';
 import { MyInvitationList } from '@/src/components/MyInvitationList';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
@@ -61,12 +62,7 @@ function MyInvitations() {
 
 export default function InvitationsPage() {
   const { user, loading } = useCurrentUser();
-  if (loading)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading…
-      </main>
-    );
+  if (loading) return <PageSkeleton variant="list" label="Loading…" />;
   if (!user)
     return (
       <main className="loading-screen">

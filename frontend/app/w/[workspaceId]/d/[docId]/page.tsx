@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ApiError } from '@/src/apiClient';
 import { AppShell } from '@/src/components/AppShell';
 import { DocumentEditor } from '@/src/components/DocumentEditor';
+import { PageSkeleton } from '@/src/components/PageSkeleton';
 import { Brand } from '@/src/components/ui';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
 import { useDocument } from '@/src/hooks/useDocument';
@@ -28,12 +29,7 @@ export default function DocumentPage() {
   const { user, loading: userLoading } = useCurrentUser();
   const { data: document, error, loading } = useDocument(Number(params.docId));
 
-  if (userLoading || loading)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading document…
-      </main>
-    );
+  if (userLoading || loading) return <PageSkeleton variant="document" label="Loading document…" />;
   if (!document)
     return (
       <main className="loading-screen">

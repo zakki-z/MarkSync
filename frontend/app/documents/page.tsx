@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ApiError } from '@/src/apiClient';
+import { PageSkeleton } from '@/src/components/PageSkeleton';
 import { useEndSession } from '@/src/hooks/useEndSession';
 import { queryKeys, staleTime } from '@/src/queries/keys';
 import { createWorkspace, listWorkspaces } from '@/src/workspaceService';
@@ -39,12 +40,7 @@ export default function DocumentsEntry() {
       });
   }, [router, endSession, queryClient]);
 
-  if (!error)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading your workspace…
-      </main>
-    );
+  if (!error) return <PageSkeleton variant="documents" label="Loading your workspace…" />;
   return (
     <main className="loading-screen">
       <div className="loading-error">

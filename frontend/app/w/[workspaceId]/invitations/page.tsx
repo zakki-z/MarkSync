@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AppShell } from '@/src/components/AppShell';
 import { InviteForm } from '@/src/components/InviteForm';
+import { PageSkeleton } from '@/src/components/PageSkeleton';
 import { PendingInvitations } from '@/src/components/PendingInvitations';
 import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { useCurrentUser } from '@/src/hooks/useCurrentUser';
@@ -27,11 +28,7 @@ export default function WorkspaceInvitationsPage() {
   const [actionError, setActionError] = useState('');
 
   if (userLoading || membership.loading)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading invitations…
-      </main>
-    );
+    return <PageSkeleton variant="list" label="Loading invitations…" />;
   if (!user || membership.error || !membership.data)
     return (
       <main className="loading-screen">

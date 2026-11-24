@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ApiError } from '@/src/apiClient';
 import { AppShell } from '@/src/components/AppShell';
+import { PageSkeleton } from '@/src/components/PageSkeleton';
 import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
 import { DocumentList } from '@/src/components/DocumentList';
 import { WorkspacePresencePanel } from '@/src/components/WorkspacePresencePanel';
@@ -44,11 +45,7 @@ export default function WorkspaceDashboard() {
   };
 
   if (userLoading || loading)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading your workspace…
-      </main>
-    );
+    return <PageSkeleton variant="documents" label="Loading your workspace…" />;
   if (!user || error || !documents)
     return (
       <main className="loading-screen">
