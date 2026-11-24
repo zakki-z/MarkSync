@@ -1,0 +1,152 @@
+/*
+ * MarkSync design tokens: the single source of truth for colour, radius, shadow, motion and
+ * typography. Imported once, from app/globals.css, right after Tailwind.
+ *
+ * - Raw values live on :root (light) and .dark (dark) as plain CSS variables.
+ * - The @theme block maps them to Tailwind, so `bg-background`, `text-foreground`,
+ *   `border-border`, `rounded-lg`, `shadow-md`, `max-w-reading`... read these variables.
+ * - Spacing is intentionally Tailwind's default scale.
+ *
+ * See docs/frontend-styling.md before adding or renaming a token.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Colour: surfaces and text */
+  --background: #ffffff;
+  --foreground: #1c2738;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --input: #cbd5e1;
+  --ring: #0070f3;
+
+  /* Colour: the single accent, and destructive actions */
+  --primary: #0070f3;
+  --primary-foreground: #ffffff;
+  --destructive: #bd3842;
+  --destructive-foreground: #ffffff;
+
+  /* Colour: secondary surfaces used by shadcn/ui primitives (menus, toasts, hovers) */
+  --popover: #ffffff;
+  --popover-foreground: #1c2738;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #1c2738;
+  --accent: #eef3fa;
+  --accent-foreground: #1c2738;
+
+  /* Colour: collaborator presence (cursors, avatars). Assign by index, wrap around at 8. */
+  --presence-1: #2563eb;
+  --presence-2: #db2777;
+  --presence-3: #059669;
+  --presence-4: #d97706;
+  --presence-5: #7c3aed;
+  --presence-6: #0891b2;
+  --presence-7: #dc2626;
+  --presence-8: #4d7c0f;
+
+  /* Radius: one base value, the scale is derived in @theme (matches Tailwind's defaults). */
+  --radius: 0.5rem;
+
+  /* Shadow: subtle. xs and sm equal Tailwind's defaults so existing `shadow-sm` looks the same. */
+  --elevation-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --elevation-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --elevation-md: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05);
+  --elevation-lg: 0 12px 32px -8px rgb(15 23 42 / 0.12), 0 4px 8px -4px rgb(15 23 42 / 0.06);
+
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Typography. --font-geist-* are set on <html> by next/font (see src/styles/fonts.ts). */
+  --font-ui: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-code: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --prose-width: 70ch;
+  --prose-line-height: 1.7;
+}
+
+.dark {
+  --background: #0b1220;
+  --foreground: #e6ebf2;
+  --muted: #172033;
+  --muted-foreground: #94a3b8;
+  --border: #243047;
+  --input: #2e3b54;
+  --ring: #4c9bff;
+
+  --primary: #4c9bff;
+  --primary-foreground: #0b1220;
+  --destructive: #f0646d;
+  --destructive-foreground: #0b1220;
+
+  --popover: #111a2b;
+  --popover-foreground: #e6ebf2;
+  --secondary: #1b2538;
+  --secondary-foreground: #e6ebf2;
+  --accent: #1e293d;
+  --accent-foreground: #e6ebf2;
+
+  --presence-1: #60a5fa;
+  --presence-2: #f472b6;
+  --presence-3: #34d399;
+  --presence-4: #fbbf24;
+  --presence-5: #a78bfa;
+  --presence-6: #22d3ee;
+  --presence-7: #f87171;
+  --presence-8: #a3e635;
+
+  /* xs and sm keep their light values so existing `shadow-sm` is identical in both themes. */
+  --elevation-md: 0 4px 12px -2px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --elevation-lg: 0 12px 32px -8px rgb(0 0 0 / 0.5), 0 4px 8px -4px rgb(0 0 0 / 0.35);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-presence-1: var(--presence-1);
+  --color-presence-2: var(--presence-2);
+  --color-presence-3: var(--presence-3);
+  --color-presence-4: var(--presence-4);
+  --color-presence-5: var(--presence-5);
+  --color-presence-6: var(--presence-6);
+  --color-presence-7: var(--presence-7);
+  --color-presence-8: var(--presence-8);
+
+  --radius-xs: calc(var(--radius) - 6px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --shadow-xs: var(--elevation-xs);
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+
+  --ease-standard: var(--motion-ease);
+
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+
+  --container-reading: var(--prose-width);
+  --leading-reading: var(--prose-line-height);
+}
