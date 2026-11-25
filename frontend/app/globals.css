@@ -1,27 +1,45 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '../src/styles/tokens.css';
+@import '../src/styles/surfaces.css';
+
+@layer base {
+  html {
+    background-color: var(--background);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-ui);
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  ::selection {
+    background-color: var(--accent-tint);
+  }
+  /* One visible focus ring everywhere: the accent ring, offset from the element. */
+  :where(button, a, input, textarea, select, [role='button'], [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
 
 /*
  * Legacy styles below predate the design tokens (src/styles/tokens.css) and keep hard-coded
- * light colours and fonts on purpose: existing screens must not change until they are migrated.
- * Remove the pinned values here as each screen moves to the token utilities.
+ * light colours on purpose: they are removed as each screen moves to the token utilities.
  */
 :root {
-  --legacy-font-sans: Arial, Helvetica, sans-serif;
-  --legacy-font-mono: 'Courier New', monospace;
-}
-
-/* Preflight defaults (html, code, pre...) stay on the legacy fonts until screens migrate. */
-@theme inline {
-  --default-font-family: var(--legacy-font-sans);
-  --default-mono-font-family: var(--legacy-font-mono);
-}
-
-body {
-  background: #ffffff;
-  color: #171717;
-  font-family: var(--legacy-font-sans), Arial, Helvetica, sans-serif;
+  --legacy-font-sans: var(--font-ui);
+  --legacy-font-mono: var(--font-code);
 }
 
 /* Workspace layout and Markdown typography. */

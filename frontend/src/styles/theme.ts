@@ -1,7 +1,8 @@
 /*
  * Light/dark theme helpers. The theme is a `.dark` class on <html>; src/styles/tokens.css
- * swaps every colour token under that class. The user's choice is stored in localStorage;
- * without one, the system preference (prefers-color-scheme) decides.
+ * swaps every colour token under that class. The user's choice is stored in localStorage.
+ * Dark is the default: without a stored choice the app is dark. `system` (stored explicitly)
+ * follows prefers-color-scheme.
  */
 
 export type ThemePreference = 'light' | 'dark' | 'system';
@@ -12,18 +13,20 @@ export const THEME_STORAGE_KEY = 'marksync-theme';
 export const THEME_CHANGE_EVENT = 'marksync-theme-change';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
+/** What the app shows before the user has chosen. */
+export const DEFAULT_THEME: ThemePreference = 'dark';
 
 function isPreference(value: unknown): value is ThemePreference {
   return value === 'light' || value === 'dark' || value === 'system';
 }
 
 export function getThemePreference(): ThemePreference {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return DEFAULT_THEME;
   try {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return isPreference(stored) ? stored : 'system';
+    return isPreference(stored) ? stored : DEFAULT_THEME;
   } catch {
-    return 'system';
+    return DEFAULT_THEME;
   }
 }
 
@@ -40,11 +43,10 @@ export function applyTheme(theme: ResolvedTheme) {
   document.documentElement.classList.toggle('dark', theme === 'dark');
 }
 
-/** Stores the preference (`system` clears it), applies it and notifies subscribers. */
+/** Stores the preference, applies it and notifies subscribers. */
 export function setThemePreference(preference: ThemePreference) {
   try {
-    if (preference === 'system') window.localStorage.removeItem(THEME_STORAGE_KEY);
-    else window.localStorage.setItem(THEME_STORAGE_KEY, preference);
+    window.localStorage.setItem(THEME_STORAGE_KEY, preference);
   } catch {
     // Storage can be unavailable (private mode, blocked cookies): still apply for this page.
   }
@@ -59,7 +61,8 @@ export function toggleTheme() {
 
 /**
  * Inline <head> script that applies the theme before the first paint (no flash of the wrong
- * theme), and keeps following the system preference while no explicit choice is stored.
+ * theme). Without a stored choice it applies the default (dark); with `system` it keeps
+ * following the system preference.
  * It must stay self-contained: it runs before any bundle is loaded.
  */
-export const themeInitScript = `(function(){var k=${JSON.stringify(THEME_STORAGE_KEY)},m=window.matchMedia(${JSON.stringify(DARK_QUERY)});function p(){try{return localStorage.getItem(k)}catch(e){return null}}function a(){var s=p();document.documentElement.classList.toggle("dark",s==="dark"||(s!=="light"&&m.matches))}a();m.addEventListener("change",a)})()`;
+export const themeInitScript = `(function(){var k=${JSON.stringify(THEME_STORAGE_KEY)},m=window.matchMedia(${JSON.stringify(DARK_QUERY)});function p(){try{return localStorage.getItem(k)}catch(e){return null}}function a(){var s=p();document.documentElement.classList.toggle("dark",s==="system"?m.matches:s!=="light")}a();m.addEventListener("change",a)})()`;

@@ -33,7 +33,7 @@ function subscribe(onChange: () => void) {
 
 // Snapshots are strings so useSyncExternalStore can compare them by value.
 const getSnapshot = () => `${getThemePreference()}:${resolveTheme(getThemePreference())}`;
-const getServerSnapshot = () => 'system:light';
+const getServerSnapshot = () => 'dark:dark';
 
 /** Current theme preference and the theme actually shown, plus setters. No UI included. */
 export function useTheme(): {

@@ -1,0 +1,56 @@
+/*
+ * Surface utilities built only from the tokens in tokens.css. Depth comes from slightly
+ * translucent panels, thin borders and blur on what floats: no gradients, glows or images.
+ *
+ * - `glass`: a floating panel (sidebar, top bar). Blurs what scrolls underneath it.
+ * - `glass-flat`: a content panel on the flat page (lists, editor panes). Same look, no blur,
+ *   because nothing ever passes behind it and blur would cost a repaint on every keystroke.
+ * - `glass-overlay`: popovers, menus, dialogs, the palette and toasts.
+ * - `glass-backdrop`: the dimmed, blurred layer behind modal dialogs.
+ * - `field`: inset inputs.
+ * - `section-label`: the small uppercase labels above sidebar and list sections.
+ * Solid fallbacks are handled by the tokens themselves (see the end of tokens.css).
+ */
+
+@utility glass {
+  background-color: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+@utility glass-flat {
+  background-color: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
+}
+
+@utility glass-overlay {
+  background-color: var(--overlay);
+  border: 1px solid var(--overlay-border);
+  box-shadow:
+    inset 0 1px 0 var(--panel-highlight),
+    var(--overlay-shadow);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  backdrop-filter: blur(30px) saturate(160%);
+}
+
+@utility glass-backdrop {
+  background-color: var(--backdrop);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+@utility field {
+  background-color: var(--field);
+  border: 1px solid var(--field-border);
+}
+
+@utility section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label);
+}
