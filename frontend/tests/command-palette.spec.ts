@@ -101,6 +101,20 @@ test.describe('command palette', () => {
     await expect(search).toBeFocused();
   });
 
+  test('Ctrl+K toggles the palette on every platform, even from inside it', async ({ page }) => {
+    await signIn(page);
+    await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [] }));
+    await page.goto('/w/1');
+    await expect(page.getByText('No documents yet')).toBeVisible();
+    // Control explicitly, not ControlOrMeta: this is what Windows and Linux users press.
+    await page.keyboard.press('Control+k');
+    await expect(palette(page).getByRole('combobox')).toBeFocused();
+    await page.keyboard.press('Control+k');
+    await expect(palette(page)).toBeHidden();
+    await page.keyboard.press('Control+k');
+    await expect(palette(page)).toBeVisible();
+  });
+
   test('runs actions: new document, workspaces and the invite dialog', async ({ page }) => {
     await signIn(page);
     await page.route('**/api/workspaces/1/members', (route) => route.fulfill({ json: [] }));

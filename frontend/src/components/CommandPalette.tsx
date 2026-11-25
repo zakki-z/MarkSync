@@ -189,6 +189,9 @@ export function CommandPalette({
         <Command
           filter={paletteFilter}
           loop
+          // cmdk binds Ctrl+J/K/N/P to move through the list and swallows them. Ctrl+K must stay
+          // the palette's own toggle on Windows and Linux, as ⌘K is on macOS; arrows navigate.
+          vimBindings={false}
           className="[&_[cmdk-input-wrapper]]:h-14 [&_[data-slot=command-input-wrapper]]:h-14 [&_[data-slot=command-input-wrapper]]:border-overlay-border [&_[data-slot=command-input-wrapper]]:px-4"
         >
           <CommandInput
