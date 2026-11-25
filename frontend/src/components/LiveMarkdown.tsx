@@ -1,6 +1,7 @@
 'use client';
 
 import type { DocumentCollaboration } from '@/src/collab/DocumentCollaboration';
+import { countWords } from '@/src/components/document/editorState';
 import { useDocumentText } from '@/src/hooks/useDocumentText';
 import { useThrottledValue } from '@/src/hooks/useThrottledValue';
 import { MarkdownPreview } from '@/src/MarkdownPreview';
@@ -19,7 +20,23 @@ type Props = {
 
 export function CharacterCount(props: Props) {
   const markdown = useDocumentText(props.collab, props.live, props.fallback);
-  return <span>Markdown · {markdown.length.toLocaleString()} characters</span>;
+  return <span>{markdown.length.toLocaleString()} characters</span>;
+}
+
+/** Word and character counts. Long documents are counted at most every PREVIEW_INTERVAL_MS. */
+export function TextStats(props: Props) {
+  const markdown = useDocumentText(props.collab, props.live, props.fallback);
+  const shown = useThrottledValue(
+    markdown,
+    markdown.length > LARGE_DOCUMENT ? PREVIEW_INTERVAL_MS : 0,
+  );
+  const words = countWords(shown);
+  return (
+    <span>
+      {words.toLocaleString()} {words === 1 ? 'word' : 'words'} · {shown.length.toLocaleString()}{' '}
+      characters
+    </span>
+  );
 }
 
 /**
