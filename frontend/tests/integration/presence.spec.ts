@@ -3,6 +3,19 @@ import { randomUUID } from 'node:crypto';
 
 const password = 'presence-test-password';
 
+/** Opens the "Here now" popover of the top bar and returns its list of online users. */
+async function onlineUsers(page: Page) {
+  const list = page.getByRole('list', { name: 'Online Users' });
+  if (!(await list.isVisible()))
+    await page.getByRole('button', { name: /online\. Show who is here/ }).click();
+  return list;
+}
+
+async function openChat(page: Page) {
+  await page.getByRole('button', { name: 'Workspace chat' }).click();
+  return page.getByRole('region', { name: 'Workspace messages' });
+}
+
 async function signup(page: Page, email: string, username: string) {
   await page.goto('/auth');
   await page.getByRole('button', { name: "Don't have an account? Sign up" }).click();
@@ -57,22 +70,26 @@ test('two accounts see each other online, exchange messages, and a removed membe
     await ownerPage.goto(workspaceUrl);
     await guestPage.goto(workspaceUrl);
     for (const page of [ownerPage, guestPage]) {
-      const online = page.getByRole('region', { name: 'Online Users' });
+      await expect(page.getByRole('status', { name: 'Workspace connection: Live' })).toBeVisible();
+      const online = await onlineUsers(page);
       await expect(online.getByRole('listitem')).toHaveCount(2);
       await expect(online).toContainText(ownerName);
       await expect(online).toContainText(guestName);
       await expect(online).not.toContainText('@example.com');
-      await expect(page.getByRole('status')).toHaveText('Connected');
+      await page.keyboard.press('Escape');
     }
 
+    const ownerLog = await openChat(ownerPage);
+    const guestLog = await openChat(guestPage);
     await ownerPage.getByLabel('Message', { exact: true }).fill('hello guest');
     await ownerPage.getByRole('button', { name: 'Send' }).click();
-    const guestLog = guestPage.getByRole('region', { name: 'Workspace messages' });
-    await expect(guestLog).toContainText(`${ownerName} hello guest`);
+    await expect(guestLog).toContainText(ownerName);
+    await expect(guestLog).toContainText('hello guest');
     await guestPage.getByLabel('Message', { exact: true }).fill('hello owner');
     await guestPage.getByRole('button', { name: 'Send' }).click();
-    const ownerLog = ownerPage.getByRole('region', { name: 'Workspace messages' });
-    await expect(ownerLog).toContainText(`${guestName} hello owner`);
+    await expect(ownerLog).toContainText(guestName);
+    await expect(ownerLog).toContainText('hello owner');
+    await ownerPage.keyboard.press('Escape');
 
     // Removing the member is noticed by the next access revalidation.
     const members = await (
@@ -88,14 +105,13 @@ test('two accounts see each other online, exchange messages, and a removed membe
         })
       ).status(),
     ).toBe(204);
-    await expect(guestPage.getByRole('status')).toHaveText('Access revoked', { timeout: 40_000 });
-    await expect(guestPage.getByText('Your access to this workspace was revoked.')).toBeVisible();
     await expect(
-      ownerPage.getByRole('region', { name: 'Online Users' }).getByRole('listitem'),
-    ).toHaveCount(1);
-    await expect(ownerPage.getByRole('region', { name: 'Online Users' })).not.toContainText(
-      guestName,
-    );
+      guestPage.getByRole('status', { name: 'Workspace connection: Access revoked' }),
+    ).toBeVisible({ timeout: 40_000 });
+    await expect(guestPage.getByText('Your access to this workspace was revoked.')).toBeVisible();
+    const ownerOnline = await onlineUsers(ownerPage);
+    await expect(ownerOnline.getByRole('listitem')).toHaveCount(1);
+    await expect(ownerOnline).not.toContainText(guestName);
   } finally {
     await owner.close();
     await guest.close();

@@ -66,7 +66,7 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
   expect(await page.evaluate(() => document.cookie)).not.toContain('marksync_session');
   expect(await page.evaluate(() => sessionStorage.length)).toBe(0);
   const workspaceId = new URL(page.url()).pathname.split('/')[2];
-  await page.getByRole('button', { name: '+ New document' }).click();
+  await page.getByRole('button', { name: 'New document', exact: true }).first().click();
   await expect(page).toHaveURL(/\/w\/\d+\/d\/\d+$/);
   const documentUrl = page.url();
   const documentId = Number(documentUrl.split('/').pop());
@@ -96,7 +96,7 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
   await expect(page.locator('.markdown-content h1')).toHaveText('Hello MarkSync');
   await expect(page.locator('.markdown-content strong')).toHaveText('Saved');
   await expect(page.locator('.markdown-content script, .markdown-content a')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Edit Markdown' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(editor).toHaveAttribute('contenteditable', 'true');
   await editor.click();
   await page.keyboard.press('ControlOrMeta+a');
@@ -114,11 +114,16 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
   try {
     const secondPage = await second.newPage();
     await login(secondPage, email);
-    const presence = page.getByRole('region', { name: 'Online Users' });
+    await page.getByRole('button', { name: /online\. Show who is here/ }).click();
+    const presence = page.getByRole('list', { name: 'Online Users' });
     await expect(presence.getByRole('listitem')).toHaveCount(1);
-    await expect(presence).toContainText('you');
-    await secondPage.getByRole('link', { name: /Walking skeleton/ }).click();
-    await expect(secondPage.getByRole('region', { name: 'Online Users' })).toContainText('you');
+    await expect(presence).toContainText('(you)');
+    await secondPage
+      .getByRole('list', { name: 'Documents' })
+      .getByRole('link', { name: /Walking skeleton/ })
+      .click();
+    await secondPage.getByRole('button', { name: /online\. Show who is here/ }).click();
+    await expect(secondPage.getByRole('list', { name: 'Online Users' })).toContainText('(you)');
     // Two tabs of one user are one person online.
     await expect(presence.getByRole('listitem')).toHaveCount(1);
     await second.close();
@@ -155,7 +160,10 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
     ).toBe(403);
 
     // Public documents are readable anonymously but never writable.
-    await page.getByLabel('Visibility').selectOption('PUBLIC');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Document visibility: Private' }).click();
+    await page.getByRole('combobox', { name: 'Visibility' }).selectOption('PUBLIC');
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByText('Document saved successfully.')).toBeVisible();
     const anonymous = await browser.newContext({ baseURL });
@@ -185,7 +193,8 @@ test('walking skeleton through Nginx: auth, private CRUD, Markdown, presence, lo
     }
 
     page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
     await expect(page).toHaveURL(`/w/${workspaceId}`);
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL('/auth');

@@ -121,12 +121,34 @@ test.describe('collaborative editor', () => {
     expect(collaboration.joins).toBe(1);
 
     await page
-      .getByRole('link', { name: /invitations/i })
-      .first()
+      .getByRole('navigation', { name: 'Breadcrumb' })
+      .getByRole('link', { name: 'Personal' })
       .click();
-    await expect(page).toHaveURL(/\/invitations$/);
+    await expect(page).toHaveURL('/w/1');
     await expect.poll(() => collaboration.leaves).toBe(1);
     await expect.poll(() => collaboration.closes).toBeGreaterThan(0);
+  });
+});
+
+test.describe('editor status bar', () => {
+  test('follows the cursor and counts words as the text changes', async ({ page }) => {
+    await mockCollaboration(page, { markdown: '# Notes' });
+    await openDocument(page);
+    const status = page.getByRole('region', { name: 'Editor' }).locator('footer');
+    await expect(editor(page)).toHaveText('# Notes');
+    await expect(status).toContainText('Ln 1, Col 1');
+    await expect(status).toContainText('1 word · 7 characters');
+
+    await editor(page).click();
+    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('two more');
+    await expect(status).toContainText('Ln 2, Col 9');
+    await expect(status).toContainText('3 words · 16 characters');
+
+    await page.keyboard.press('Shift+Home');
+    await expect(status).toContainText('Ln 2, Col 1 (8 selected)');
+    await expect(status).toContainText('All changes synced');
   });
 });
 
@@ -140,7 +162,9 @@ test.describe('read-only behaviour', () => {
 
     collaboration.setCanEdit(false);
     await expect(editor(page)).toHaveAttribute('contenteditable', 'false');
-    await expect(page.locator('.alert.error')).toContainText('no longer have permission');
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'no longer have permission' }),
+    ).toBeVisible();
 
     await editor(page).click();
     await page.keyboard.type('blocked');

@@ -15,6 +15,14 @@ const document = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+/** A row of the document list (the quick-action card links to a document too). */
+const docLink = (page: Page, name: RegExp) =>
+  page.getByRole('list', { name: 'Documents' }).getByRole('link', { name });
+
+async function openMoreActions(page: Page) {
+  await page.getByRole('button', { name: 'More actions' }).click();
+}
+
 async function signIn(page: Page) {
   await page.context().addCookies([
     {
@@ -40,7 +48,7 @@ test.describe('signed in', () => {
     await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [] }));
     await page.goto('/documents');
     await expect(page).toHaveURL('/w/1');
-    await expect(page.getByText('No documents yet. Create your first one.')).toBeVisible();
+    await expect(page.getByText('No documents yet')).toBeVisible();
   });
 
   test('creates a personal workspace when the user has none', async ({ page }) => {
@@ -76,11 +84,11 @@ test.describe('signed in', () => {
       route.fulfill({ json: document({ id: 9, title: 'Untitled document' }) }),
     );
     await page.goto('/w/1');
-    await expect(page.getByRole('link', { name: /Original/ })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Roadmap.*Public/ })).toBeVisible();
-    await page.getByPlaceholder('Search documents…').fill('road');
-    await expect(page.getByRole('link', { name: /Original/ })).toHaveCount(0);
-    await page.getByRole('button', { name: '+ New document' }).click();
+    await expect(docLink(page, /Original/)).toBeVisible();
+    await expect(docLink(page, /Roadmap.*Public/)).toBeVisible();
+    await page.getByPlaceholder('Filter documents…').fill('road');
+    await expect(docLink(page, /Original/)).toHaveCount(0);
+    await page.getByRole('button', { name: 'New document', exact: true }).click();
     await expect(page).toHaveURL('/w/1/d/9');
     await expect(page.getByLabel('Document title')).toHaveValue('Untitled document');
   });
@@ -95,7 +103,7 @@ test.describe('signed in', () => {
     await page.goto('/w/1');
     await page.getByRole('link', { name: 'Team' }).click();
     await expect(page).toHaveURL('/w/4');
-    const profile = await page.locator('.profile-bar').boundingBox();
+    const profile = await page.getByTestId('account-card').boundingBox();
     const viewport = page.viewportSize()!;
     expect(profile!.y + profile!.height).toBeGreaterThan(viewport.height - 40);
   });
@@ -111,7 +119,7 @@ test.describe('signed in', () => {
       await page.getByRole('button', { name: `Pin ${name}` }).click();
     await expect(page.getByRole('heading', { name: 'Pinned' })).toBeVisible();
     await page.getByRole('button', { name: 'Pin Team' }).click();
-    await expect(page.locator('.alert.error')).toContainText('up to 3 workspaces');
+    await expect(page.getByText('You can pin up to 3 workspaces')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Unpin Work' })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('button', { name: 'Unpin Uni' })).toBeVisible();
@@ -125,15 +133,17 @@ test.describe('signed in', () => {
     await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
     await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: docs }));
     await page.goto('/w/1');
-    await page.getByRole('button', { name: 'Pin Doc 4' }).click();
-    await expect(page.locator('.document-item').first()).toContainText('Doc 4');
-    await page.getByRole('button', { name: 'Pin Doc 3' }).click();
-    await page.getByRole('button', { name: 'Pin Doc 2' }).click();
-    await page.getByRole('button', { name: 'Pin Doc 1' }).click();
-    await expect(page.locator('.alert.error')).toContainText('up to 3 documents');
+    await page.getByRole('button', { name: 'Star Doc 4' }).click();
+    await expect(
+      page.getByRole('list', { name: 'Documents' }).getByRole('listitem').first(),
+    ).toContainText('Doc 4');
+    await page.getByRole('button', { name: 'Star Doc 3' }).click();
+    await page.getByRole('button', { name: 'Star Doc 2' }).click();
+    await page.getByRole('button', { name: 'Star Doc 1' }).click();
+    await expect(page.getByText('You can star up to 3 documents')).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Unpin Doc 4' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Pin Doc 1' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Unstar Doc 4' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Star Doc 1' })).toBeVisible();
   });
 
   test('shows the API error when creating a document is forbidden', async ({ page }) => {
@@ -146,8 +156,9 @@ test.describe('signed in', () => {
       }
     });
     await page.goto('/w/1');
-    await page.getByRole('button', { name: '+ New document' }).click();
-    await expect(page.locator('.alert.error')).toContainText('Access denied');
+    await page.getByRole('button', { name: 'New document', exact: true }).first().click();
+    await expect(page.getByText('Access denied')).toBeVisible();
+    await expect(page).toHaveURL('/w/1');
   });
 
   test('edits, previews and deletes a document the user can edit', async ({ page }) => {
@@ -181,7 +192,10 @@ test.describe('signed in', () => {
     await expect.poll(() => collaboration.text()).toBe('# Hello MarkSync\n\n**Saved**');
 
     await page.getByLabel('Document title').fill('Edited');
-    await page.getByLabel('Visibility').selectOption('PUBLIC');
+    await page.getByRole('button', { name: 'Document visibility: Private' }).click();
+    await page.getByRole('combobox', { name: 'Visibility' }).selectOption('PUBLIC');
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('Unsaved changes')).toBeVisible();
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByText('Document saved successfully.')).toBeVisible();
     // Saving sends the title and visibility only: the text is not saved through REST.
@@ -190,7 +204,8 @@ test.describe('signed in', () => {
     await expect(page.locator('.markdown-content h1')).toHaveText('Hello MarkSync');
     await expect(page.locator('.markdown-content strong')).toHaveText('Saved');
     page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await openMoreActions(page);
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
     await expect(page).toHaveURL('/w/1');
   });
 
@@ -213,7 +228,10 @@ test.describe('signed in', () => {
     await page.getByRole('button', { name: 'Save changes' }).click();
     try {
       await expect(page.getByLabel('Document title')).toBeDisabled();
-      await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+      await expect(page.getByText('Saving…').first()).toBeVisible();
+      await openMoreActions(page);
+      await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeDisabled();
+      await page.keyboard.press('Escape');
     } finally {
       release();
     }
@@ -233,7 +251,7 @@ test.describe('signed in', () => {
     await expect(page.getByLabel('Markdown content')).toHaveCount(0);
     await expect(page.getByLabel('Document title')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'More actions' })).toHaveCount(0);
   });
 
   test('explains when the user has no access to a document', async ({ page }) => {
