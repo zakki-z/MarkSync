@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRestoreFocus } from '@/src/hooks/useRestoreFocus';
 import { cn } from '@/src/lib/utils';
 import { XIcon } from 'lucide-react';
 import { Dialog as SheetPrimitive } from 'radix-ui';
@@ -42,11 +43,14 @@ function SheetContent({
   children,
   side = 'right',
   showCloseButton = true,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: 'top' | 'right' | 'bottom' | 'left';
   showCloseButton?: boolean;
 }) {
+  const focus = useRestoreFocus({ onOpenAutoFocus, onCloseAutoFocus });
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -64,6 +68,8 @@ function SheetContent({
             'inset-x-0 bottom-0 h-auto border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
           className,
         )}
+        onOpenAutoFocus={focus.onOpenAutoFocus}
+        onCloseAutoFocus={focus.onCloseAutoFocus}
         {...props}
       >
         {children}
