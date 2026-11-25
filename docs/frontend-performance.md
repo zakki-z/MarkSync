@@ -54,9 +54,11 @@ Callbacks passed to memoised children (`onSessionExpired`, row handlers) must be
 
 Next.js already splits JavaScript per route. The extra split is the editor: `DocumentEditor`
 loads `CollaborativeEditor` (CodeMirror and its language packs, roughly 530 kB raw) with
-`next/dynamic`, so it is not part of the document route's first load. Keep other large, optional
-libraries behind the same pattern, and give the placeholder the final element's box so nothing
-moves when it loads.
+`next/dynamic`, so it is not part of the document route's first load. The shell's overlays (the
+command palette with `cmdk`, the invite dialog with its Select, the new workspace dialog and the
+mobile navigation drawer) load the same way, the first time they open, and then stay mounted.
+Keep other large, optional libraries behind the same pattern, and give the placeholder the final
+element's box so nothing moves when it loads.
 
 ## Loading states
 

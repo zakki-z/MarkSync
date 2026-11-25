@@ -1,17 +1,14 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import type { AuthUser } from '@/src/authService';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { CommandPalette } from '@/src/components/CommandPalette';
 import { InvitationsProvider } from '@/src/components/InvitationsContext';
-import { InviteDialog } from '@/src/components/InviteDialog';
 import { WorkspacePresenceProvider } from '@/src/components/presence/WorkspacePresence';
-import { Sheet, SheetContent, SheetTitle } from '@/src/components/primitives/sheet';
 import { Toaster } from '@/src/components/primitives/sonner';
 import { TooltipProvider } from '@/src/components/primitives/tooltip';
-import { NewWorkspaceDialog } from '@/src/components/shell/NewWorkspaceDialog';
 import { ShellProvider, type Shell } from '@/src/components/shell/ShellContext';
 import { Sidebar, SidebarRail, type SidebarProps } from '@/src/components/shell/Sidebar';
 import { useEndSession } from '@/src/hooks/useEndSession';
@@ -21,6 +18,31 @@ import { usePrefetch } from '@/src/hooks/usePrefetch';
 import { useWorkspaces } from '@/src/hooks/useWorkspaces';
 import { cn } from '@/src/lib/utils';
 import type { Workspace } from '@/src/workspaceService';
+
+/*
+ * Overlays are needed only once someone opens them, and they carry most of the UI libraries
+ * (cmdk, Select, Dialog, Sheet). They load on first use and then stay mounted, so closing
+ * animations and focus restoration work as usual.
+ */
+const CommandPalette = dynamic(
+  () => import('@/src/components/CommandPalette').then((module) => module.CommandPalette),
+  { ssr: false },
+);
+const InviteDialog = dynamic(
+  () => import('@/src/components/InviteDialog').then((module) => module.InviteDialog),
+  { ssr: false },
+);
+const NewWorkspaceDialog = dynamic(
+  () =>
+    import('@/src/components/shell/NewWorkspaceDialog').then((module) => module.NewWorkspaceDialog),
+  { ssr: false },
+);
+const NavigationDrawer = dynamic(
+  () => import('@/src/components/shell/NavigationDrawer').then((module) => module.NavigationDrawer),
+  { ssr: false },
+);
+
+type Overlay = 'palette' | 'invite' | 'workspace' | 'drawer';
 
 /**
  * The signed-in frame: a floating glass sidebar (a drawer on narrow screens, an icon rail on
@@ -51,6 +73,13 @@ export function AppShell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [inviteWorkspace, setInviteWorkspace] = useState<number>();
   const [railExpanded, setRailExpanded] = useState(false);
+  // Which overlays have been opened at least once, and so are loaded.
+  const [loaded, setLoaded] = useState<ReadonlySet<Overlay>>(() => new Set());
+  const load = useCallback(
+    (overlay: Overlay) =>
+      setLoaded((current) => (current.has(overlay) ? current : new Set(current).add(overlay))),
+    [],
+  );
   const collapsed = documentOpen && !railExpanded;
 
   // Undo runs after later renders, so it must reach the pins as they are then.
@@ -76,22 +105,35 @@ export function AppShell({
       if (event.defaultPrevented || event.altKey || event.shiftKey) return;
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
       event.preventDefault();
+      load('palette');
       setPaletteOpen((open) => !open);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [load]);
 
   const shell = useMemo<Shell>(
     () => ({
-      openPalette: () => setPaletteOpen(true),
-      openInvite: (workspaceId) => setInviteWorkspace(workspaceId),
-      openNewWorkspace: () => setNewWorkspaceOpen(true),
-      openNavigation: () => setNavigationOpen(true),
+      openPalette: () => {
+        load('palette');
+        setPaletteOpen(true);
+      },
+      openInvite: (workspaceId) => {
+        load('invite');
+        setInviteWorkspace(workspaceId);
+      },
+      openNewWorkspace: () => {
+        load('workspace');
+        setNewWorkspaceOpen(true);
+      },
+      openNavigation: () => {
+        load('drawer');
+        setNavigationOpen(true);
+      },
       sidebarCollapsed: collapsed,
       toggleSidebar: documentOpen ? () => setRailExpanded((expanded) => !expanded) : undefined,
     }),
-    [collapsed, documentOpen],
+    [collapsed, documentOpen, load],
   );
 
   const sidebar: SidebarProps = {
@@ -127,27 +169,13 @@ export function AppShell({
               />
             )}
           </aside>
-          <Sheet open={navigationOpen} onOpenChange={setNavigationOpen}>
-            <SheetContent
-              side="left"
-              showCloseButton={false}
-              className="w-[280px] max-w-[85vw] rounded-r-panel p-0"
-            >
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <Sidebar
-                {...sidebar}
-                onSearch={() => {
-                  setNavigationOpen(false);
-                  shell.openPalette();
-                }}
-                onNewWorkspace={() => {
-                  setNavigationOpen(false);
-                  shell.openNewWorkspace();
-                }}
-                onNavigate={() => setNavigationOpen(false)}
-              />
-            </SheetContent>
-          </Sheet>
+          {loaded.has('drawer') && (
+            <NavigationDrawer
+              open={navigationOpen}
+              onOpenChange={setNavigationOpen}
+              sidebar={sidebar}
+            />
+          )}
           <main className="flex min-w-0 flex-1 flex-col gap-3">
             <InvitationsProvider value={invitations}>
               <WorkspacePresenceProvider workspaceId={activeWorkspaceId} onSessionExpired={expire}>
@@ -156,16 +184,25 @@ export function AppShell({
             </InvitationsProvider>
           </main>
         </div>
-        <CommandPalette
-          open={paletteOpen}
-          onOpenChange={setPaletteOpen}
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
-          onNewWorkspace={shell.openNewWorkspace}
-          onInvite={shell.openInvite}
-        />
-        <NewWorkspaceDialog open={newWorkspaceOpen} onOpenChange={setNewWorkspaceOpen} />
-        <InviteDialog workspaceId={inviteWorkspace} onClose={() => setInviteWorkspace(undefined)} />
+        {loaded.has('palette') && (
+          <CommandPalette
+            open={paletteOpen}
+            onOpenChange={setPaletteOpen}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onNewWorkspace={shell.openNewWorkspace}
+            onInvite={shell.openInvite}
+          />
+        )}
+        {loaded.has('workspace') && (
+          <NewWorkspaceDialog open={newWorkspaceOpen} onOpenChange={setNewWorkspaceOpen} />
+        )}
+        {loaded.has('invite') && (
+          <InviteDialog
+            workspaceId={inviteWorkspace}
+            onClose={() => setInviteWorkspace(undefined)}
+          />
+        )}
         <Toaster />
       </TooltipProvider>
     </ShellProvider>
