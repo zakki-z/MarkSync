@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ApiError } from '@/src/apiClient';
+import { ErrorState, FullScreenMessage, ShellSkeleton } from '@/src/components/PageStates';
+import { Button } from '@/src/components/primitives/button';
 import { useEndSession } from '@/src/hooks/useEndSession';
 import { queryKeys, staleTime } from '@/src/queries/keys';
 import { createWorkspace, listWorkspaces } from '@/src/workspaceService';
@@ -41,27 +43,25 @@ export default function DocumentsEntry() {
       });
   }, [router, endSession, attempt, queryClient]);
 
-  if (!error)
-    return (
-      <main className="loading-screen" aria-live="polite">
-        Loading your workspace…
-      </main>
-    );
+  // The shell's own skeleton, so the redirect to the workspace does not flash a different frame.
+  if (!error) return <ShellSkeleton />;
   return (
-    <main className="loading-screen">
-      <div className="loading-error">
-        <h1>Unable to open workspace</h1>
-        <p>{error}</p>
-        <button
-          className="button subtle"
-          onClick={() => {
-            setError('');
-            setAttempt((n) => n + 1);
-          }}
-        >
-          Retry
-        </button>
-      </div>
-    </main>
+    <FullScreenMessage>
+      <ErrorState
+        title="Unable to open workspace"
+        detail={error}
+        action={
+          <Button
+            variant="outline"
+            onClick={() => {
+              setError('');
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Retry
+          </Button>
+        }
+      />
+    </FullScreenMessage>
   );
 }

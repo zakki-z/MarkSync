@@ -3,10 +3,13 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { useUser } from '@/src/auth/AuthProvider';
-import { MemberList } from '@/src/components/MemberList';
-import { ContentSkeleton, LoadError } from '@/src/components/PageStates';
-import { WorkspaceTabs } from '@/src/components/WorkspaceTabs';
+import { InlineAlert, RoleBadge } from '@/src/components/common/ListRow';
+import { MemberList, memberName } from '@/src/components/MemberList';
+import { ContentSkeleton, LoadError, PageBody } from '@/src/components/PageStates';
+import { roleLabel } from '@/src/components/roleLabel';
+import { WorkspaceHeader, WorkspaceTopBar } from '@/src/components/WorkspaceTabs';
 import { useMembers } from '@/src/hooks/useMembers';
 import { useMembership } from '@/src/hooks/useMembership';
 import { queryKeys } from '@/src/queries/keys';
@@ -29,32 +32,45 @@ export default function MembersPage() {
   const canManage = membership.data?.canManageMembers ?? false;
   const [actionError, setActionError] = useState('');
 
-  const run = async (action: () => Promise<void>, fallback: string) => {
+  const run = async (action: () => Promise<void>, fallback: string, success?: string) => {
     setActionError('');
     try {
       await action();
+      if (success) toast.success(success);
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : fallback);
     }
   };
 
   const changeRole = (member: Member, role: Role) =>
-    run(async () => {
-      const updated = await changeMemberRole(workspaceId, member.userId, role);
-      members.setData(members.data!.map((m) => (m.userId === member.userId ? updated : m)));
-    }, 'Unable to change the role.');
+    run(
+      async () => {
+        const updated = await changeMemberRole(workspaceId, member.userId, role);
+        members.setData(members.data!.map((m) => (m.userId === member.userId ? updated : m)));
+      },
+      'Unable to change the role.',
+      `${memberName(member)} is now ${roleLabel(role)}`,
+    );
   const remove = (member: Member) =>
-    run(async () => {
-      await removeMember(workspaceId, member.userId);
-      members.setData(members.data!.filter((m) => m.userId !== member.userId));
-    }, 'Unable to remove the member.');
+    run(
+      async () => {
+        await removeMember(workspaceId, member.userId);
+        members.setData(members.data!.filter((m) => m.userId !== member.userId));
+      },
+      'Unable to remove the member.',
+      `Removed ${memberName(member)}`,
+    );
   const leave = () =>
-    run(async () => {
-      await leaveWorkspace(workspaceId);
-      // Everything cached for this workspace, and the sidebar list, is now out of date.
-      await queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
-      router.push('/documents');
-    }, 'Unable to leave the workspace.');
+    run(
+      async () => {
+        await leaveWorkspace(workspaceId);
+        // Everything cached for this workspace, and the sidebar list, is now out of date.
+        await queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+        router.push('/documents');
+      },
+      'Unable to leave the workspace.',
+      'You left the workspace',
+    );
 
   if (!user) return null;
   const error = membership.error ?? members.error;
@@ -64,35 +80,41 @@ export default function MembersPage() {
   };
   return (
     <>
-      <header className="workspace-topbar">
-        <div className="workspace-location">
-          <WorkspaceTabs workspaceId={workspaceId} current="members" />
-          {membership.data && (
-            <span className="readonly-badge">{membership.data.role.toLowerCase()}</span>
-          )}
-        </div>
-      </header>
-      {error ? (
-        <LoadError error={error} subject="members" onRetry={retry} />
-      ) : !membership.data || !members.data ? (
-        <ContentSkeleton label="Loading members…" />
-      ) : (
-        <div className="editor-body">
-          {actionError && (
-            <div className="alert error" role="alert">
-              {actionError}
-            </div>
-          )}
-          <MemberList
-            members={members.data}
-            currentUserId={String(user.id)}
-            canManage={canManage}
-            onChangeRole={changeRole}
-            onRemove={remove}
-            onLeave={leave}
-          />
-        </div>
-      )}
+      <WorkspaceTopBar workspaceId={workspaceId} current="members" />
+      <PageBody>
+        {error ? (
+          <LoadError error={error} subject="members" onRetry={retry} />
+        ) : (
+          <>
+            <WorkspaceHeader
+              workspaceId={workspaceId}
+              current="members"
+              aside={
+                membership.data && (
+                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    Your role <RoleBadge role={membership.data.role} />
+                  </span>
+                )
+              }
+            />
+            {!membership.data || !members.data ? (
+              <ContentSkeleton label="Loading members…" />
+            ) : (
+              <>
+                {actionError && <InlineAlert>{actionError}</InlineAlert>}
+                <MemberList
+                  members={members.data}
+                  currentUserId={String(user.id)}
+                  canManage={canManage}
+                  onChangeRole={changeRole}
+                  onRemove={remove}
+                  onLeave={leave}
+                />
+              </>
+            )}
+          </>
+        )}
+      </PageBody>
     </>
   );
 }

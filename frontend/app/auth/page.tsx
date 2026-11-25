@@ -5,7 +5,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { safeReturnPath } from '@/src/auth/authState';
 import { loginUser, signupUser } from '@/src/authService';
-import { Brand, Button, Feedback } from '@/src/components/ui';
+import { BrandTile } from '@/src/components/common/Identity';
+import { Button } from '@/src/components/primitives/button';
+import { Input } from '@/src/components/primitives/input';
+import { cn } from '@/src/lib/utils';
 
 export default function AuthPage() {
   const router = useRouter();
@@ -49,26 +52,32 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+    <main className="flex min-h-dvh items-center justify-center px-4 py-12">
       <section
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"
+        className="glass w-full max-w-md rounded-panel p-6 sm:p-10"
         aria-labelledby="auth-title"
       >
-        <Brand />
-        <h1 id="auth-title" className="mt-8 text-2xl font-bold tracking-tight text-slate-900">
+        <div className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-foreground">
+          <BrandTile className="size-8" />
+          MarkSync
+        </div>
+        <h1 id="auth-title" className="mt-8 text-2xl font-bold tracking-tight text-foreground">
           {isLogin ? 'Welcome back' : 'Create your account'}
         </h1>
-        <p className="mt-2 mb-7 text-sm leading-6 text-slate-600">
+        <p className="mt-2 mb-7 text-sm leading-6 text-muted-foreground">
           {isLogin
             ? 'Sign in to your Markdown workspace.'
             : 'A clear space for your notes, ideas, and documents.'}
         </p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-5" aria-busy={pending}>
           <div>
-            <label htmlFor="email" className="mb-2 block text-sm font-medium">
+            <label
+              htmlFor="email"
+              className="mb-2 block text-sm font-medium text-foreground-secondary"
+            >
               Email
             </label>
-            <input
+            <Input
               id="email"
               name="email"
               type="email"
@@ -76,7 +85,7 @@ export default function AuthPage() {
               required
               maxLength={254}
               disabled={pending}
-              className="form-input"
+              className="h-11"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
@@ -84,10 +93,13 @@ export default function AuthPage() {
           </div>
           {!isLogin && (
             <div>
-              <label htmlFor="username" className="mb-2 block text-sm font-medium">
+              <label
+                htmlFor="username"
+                className="mb-2 block text-sm font-medium text-foreground-secondary"
+              >
                 Username (optional)
               </label>
-              <input
+              <Input
                 id="username"
                 name="username"
                 autoComplete="username"
@@ -96,21 +108,24 @@ export default function AuthPage() {
                 pattern="[A-Za-z0-9][A-Za-z0-9_.\-]*"
                 disabled={pending}
                 aria-describedby="username-help"
-                className="form-input"
+                className="h-11"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 placeholder="your-name"
               />
-              <p id="username-help" className="mt-2 text-xs text-slate-600">
+              <p id="username-help" className="mt-2 text-xs text-muted-foreground">
                 3–32 letters, numbers, dots, underscores or hyphens. Others can invite you with it.
               </p>
             </div>
           )}
           <div>
-            <label htmlFor="password" className="mb-2 block text-sm font-medium">
+            <label
+              htmlFor="password"
+              className="mb-2 block text-sm font-medium text-foreground-secondary"
+            >
               Password
             </label>
-            <input
+            <Input
               id="password"
               name="password"
               type="password"
@@ -120,20 +135,32 @@ export default function AuthPage() {
               maxLength={128}
               disabled={pending}
               aria-describedby={!isLogin ? 'password-help' : undefined}
-              className="form-input"
+              className="h-11"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
             {!isLogin && (
-              <p id="password-help" className="mt-2 text-xs text-slate-600">
+              <p id="password-help" className="mt-2 text-xs text-muted-foreground">
                 Use 8–128 characters.
               </p>
             )}
           </div>
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" size="lg" disabled={pending}>
             {pending ? 'Please wait…' : isLogin ? 'Login' : 'Sign Up'}
           </Button>
-          {message && <Feedback error={error}>{message}</Feedback>}
+          {message && (
+            <div
+              role={error ? 'alert' : 'status'}
+              className={cn(
+                'rounded-lg px-3 py-2.5 text-sm',
+                error
+                  ? 'bg-destructive-tint text-destructive'
+                  : 'bg-success-tint text-success-text',
+              )}
+            >
+              {message}
+            </div>
+          )}
         </form>
         <button
           type="button"
@@ -143,11 +170,11 @@ export default function AuthPage() {
             setMessage('');
             setPassword('');
           }}
-          className="mt-6 min-h-11 w-full rounded-lg text-sm font-medium text-blue-700 hover:underline disabled:opacity-60"
+          className="mt-6 min-h-11 w-full cursor-pointer rounded-lg text-sm font-medium text-accent-text hover:underline disabled:opacity-60"
         >
           {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Login'}
         </button>
-        <p className="mt-5 border-t border-slate-100 pt-5 text-center text-xs leading-5 text-slate-500">
+        <p className="mt-5 border-t border-panel-border pt-5 text-center text-xs leading-5 text-muted-foreground">
           Your documents stay private to your account.
         </p>
       </section>

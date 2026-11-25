@@ -2,10 +2,18 @@
  * MarkSync design tokens: the single source of truth for colour, radius, shadow, motion and
  * typography. Imported once, from app/globals.css, right after Tailwind.
  *
- * - Raw values live on :root (light) and .dark (dark) as plain CSS variables.
+ * - Raw values live on :root (light) and .dark (dark) as plain CSS variables. Dark is the default
+ *   theme (see src/styles/theme.ts); light uses the same names with equivalent neutral values.
  * - The @theme block maps them to Tailwind, so `bg-background`, `text-foreground`,
- *   `border-border`, `rounded-lg`, `shadow-md`, `max-w-reading`... read these variables.
+ *   `border-border`, `rounded-lg`, `shadow-overlay`, `max-w-reading`... read these variables.
+ * - Surfaces (panel, overlay, field) are combined into utilities in src/styles/surfaces.css.
+ * - No colour may be written anywhere else: components use these tokens only.
  * - Spacing is intentionally Tailwind's default scale.
+ *
+ * Contrast (WCAG AA; the lower of: on --background, on a panel, on --accent-tint):
+ *   dark  foreground 14.5:1, secondary 10.8:1, muted 6.3:1, label 4.8:1, accent text 10.7:1
+ *   light foreground 14.9:1, secondary 7.9:1, muted 5.4:1, label 5.2:1, accent text 6.1:1
+ *   white on --primary 4.5:1 (5.3:1 on --primary-hover); avatar initials 5.0:1 or more.
  *
  * See docs/frontend-styling.md before adding or renaming a token.
  */
@@ -13,107 +21,216 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* Colour: surfaces and text */
-  --background: #ffffff;
-  --foreground: #1c2738;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
-  --input: #cbd5e1;
-  --ring: #0070f3;
+  color-scheme: light;
 
-  /* Colour: the single accent, and destructive actions */
-  --primary: #0070f3;
+  /* Colour: page and text */
+  --background: #f5f6f8;
+  --foreground: #111318;
+  --foreground-secondary: #3f4350;
+  --muted-foreground: #565b69;
+  --label: #5a5e6b;
+
+  /* Colour: glass panels (sidebar, top bar, lists, editor panes) */
+  --panel: rgba(255, 255, 255, 0.7);
+  --panel-border: rgba(17, 19, 24, 0.08);
+  --panel-highlight: rgba(255, 255, 255, 0.9);
+  /* Used instead of the translucent values when blur is unavailable or transparency is reduced. */
+  --panel-solid: #ffffff;
+
+  /* Colour: raised overlays (popovers, menus, dialogs, palette, toasts) */
+  --overlay: rgba(255, 255, 255, 0.82);
+  --overlay-border: rgba(17, 19, 24, 0.1);
+  --overlay-solid: #ffffff;
+  --overlay-shadow: 0 24px 60px rgba(17, 19, 24, 0.18);
+  --backdrop: rgba(17, 19, 24, 0.28);
+
+  /* Colour: inset fields (inputs, search) */
+  --field: rgba(17, 19, 24, 0.04);
+  --field-border: rgba(17, 19, 24, 0.12);
+
+  /* Colour: hover and pressed surfaces on panels */
+  --hover: rgba(17, 19, 24, 0.05);
+  --pressed: rgba(17, 19, 24, 0.08);
+
+  /* Colour: the single accent. --brand is the solid accent (rings, tiles, dots); --primary fills
+     buttons and is a little deeper so white labels pass AA. */
+  --brand: #4f6bed;
+  --primary: #4f6bed;
+  --primary-hover: #435fe0;
   --primary-foreground: #ffffff;
-  --destructive: #bd3842;
+  --accent-tint: rgba(79, 107, 237, 0.12);
+  --accent-ring: rgba(79, 107, 237, 0.4);
+  --accent-text: #2f45c4;
+  --ring: #4f6bed;
+
+  /* Colour: status */
+  --success: #16a34a;
+  --success-text: #166534;
+  --success-tint: rgba(22, 163, 74, 0.12);
+  --warning: #d97706;
+  --warning-text: #92400e;
+  --warning-tint: rgba(217, 119, 6, 0.12);
+  --destructive: #b42d38;
   --destructive-foreground: #ffffff;
+  --destructive-tint: rgba(180, 45, 56, 0.1);
+  --star: #d97706;
 
-  /* Colour: secondary surfaces used by shadcn/ui primitives (menus, toasts, hovers) */
-  --popover: #ffffff;
-  --popover-foreground: #1c2738;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #1c2738;
-  --accent: #eef3fa;
-  --accent-foreground: #1c2738;
+  /* Colour: shadcn/ui names, mapped onto the surfaces above */
+  --border: var(--panel-border);
+  --input: var(--field-border);
+  --muted: var(--hover);
+  --popover: var(--overlay);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--hover);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--hover);
+  --accent-foreground: var(--foreground);
 
-  /* Colour: collaborator presence (cursors, avatars). Assign by index, wrap around at 8. */
-  --presence-1: #2563eb;
-  --presence-2: #db2777;
-  --presence-3: #059669;
-  --presence-4: #d97706;
-  --presence-5: #7c3aed;
-  --presence-6: #0891b2;
-  --presence-7: #dc2626;
-  --presence-8: #4d7c0f;
+  /* Colour: avatars and collaborator presence. Solid fills with white initials (AA in both
+     themes). Assign by user id, wrap around at 8. */
+  --presence-1: #0f766e;
+  --presence-2: #1d4ed8;
+  --presence-3: #7c3aed;
+  --presence-4: #be185d;
+  --presence-5: #b45309;
+  --presence-6: #15803d;
+  --presence-7: #4338ca;
+  --presence-8: #0e7490;
+  --presence-foreground: #ffffff;
 
-  /* Radius: one base value, the scale is derived in @theme (matches Tailwind's defaults). */
-  --radius: 0.5rem;
+  /* Radius: inputs and buttons use the base; panels, cards and list items use the named sizes. */
+  --radius: 10px;
+  --radius-panel-size: 18px;
+  --radius-card-size: 16px;
+  --radius-item-size: 10px;
 
-  /* Shadow: subtle. xs and sm equal Tailwind's defaults so existing `shadow-sm` looks the same. */
-  --elevation-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --elevation-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --elevation-md: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05);
-  --elevation-lg: 0 12px 32px -8px rgb(15 23 42 / 0.12), 0 4px 8px -4px rgb(15 23 42 / 0.06);
+  /* Shadow */
+  --elevation-xs: 0 1px 2px 0 rgba(17, 19, 24, 0.05);
+  --elevation-sm: 0 1px 3px 0 rgba(17, 19, 24, 0.08), 0 1px 2px -1px rgba(17, 19, 24, 0.06);
+  --elevation-md: 0 4px 12px -2px rgba(17, 19, 24, 0.08), 0 2px 4px -2px rgba(17, 19, 24, 0.05);
+  --elevation-lg: var(--overlay-shadow);
 
   /* Motion */
   --duration-fast: 150ms;
   --duration-normal: 200ms;
-  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Typography. --font-geist-* are set on <html> by next/font (see src/styles/fonts.ts). */
   --font-ui: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-code: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --prose-width: 70ch;
-  --prose-line-height: 1.7;
+  --prose-width: 68ch;
+  --prose-line-height: 1.75;
+
+  /* Markdown preview */
+  --code-bg: rgba(17, 19, 24, 0.05);
+  --code-block-bg: rgba(17, 19, 24, 0.04);
 }
 
 .dark {
-  --background: #0b1220;
-  --foreground: #e6ebf2;
-  --muted: #172033;
-  --muted-foreground: #94a3b8;
-  --border: #243047;
-  --input: #2e3b54;
-  --ring: #4c9bff;
+  color-scheme: dark;
 
-  --primary: #4c9bff;
-  --primary-foreground: #0b1220;
-  --destructive: #f0646d;
-  --destructive-foreground: #0b1220;
+  --background: #08090d;
+  --foreground: #f4f4f5;
+  --foreground-secondary: #d4d4d8;
+  --muted-foreground: #9ca3af;
+  --label: #8b8d98;
 
-  --popover: #111a2b;
-  --popover-foreground: #e6ebf2;
-  --secondary: #1b2538;
-  --secondary-foreground: #e6ebf2;
-  --accent: #1e293d;
-  --accent-foreground: #e6ebf2;
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-border: rgba(255, 255, 255, 0.09);
+  --panel-highlight: rgba(255, 255, 255, 0.06);
+  --panel-solid: #12141b;
 
-  --presence-1: #60a5fa;
-  --presence-2: #f472b6;
-  --presence-3: #34d399;
-  --presence-4: #fbbf24;
-  --presence-5: #a78bfa;
-  --presence-6: #22d3ee;
-  --presence-7: #f87171;
-  --presence-8: #a3e635;
+  --overlay: rgba(22, 24, 33, 0.78);
+  --overlay-border: rgba(255, 255, 255, 0.13);
+  --overlay-solid: #161821;
+  --overlay-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --backdrop: rgba(5, 6, 10, 0.55);
 
-  /* xs and sm keep their light values so existing `shadow-sm` is identical in both themes. */
-  --elevation-md: 0 4px 12px -2px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --elevation-lg: 0 12px 32px -8px rgb(0 0 0 / 0.5), 0 4px 8px -4px rgb(0 0 0 / 0.35);
+  --field: rgba(0, 0, 0, 0.28);
+  --field-border: rgba(255, 255, 255, 0.09);
+
+  --hover: rgba(255, 255, 255, 0.05);
+  --pressed: rgba(255, 255, 255, 0.08);
+
+  --brand: #6e8bff;
+  --primary: #4f6bed;
+  --primary-hover: #435fe0;
+  --primary-foreground: #ffffff;
+  --accent-tint: rgba(110, 139, 255, 0.18);
+  --accent-ring: rgba(110, 139, 255, 0.45);
+  --accent-text: #c7d2fe;
+  --ring: #6e8bff;
+
+  --success: #22c55e;
+  --success-text: #86efac;
+  --success-tint: rgba(34, 197, 94, 0.12);
+  --warning: #fbbf24;
+  --warning-text: #fcd34d;
+  --warning-tint: rgba(251, 191, 36, 0.12);
+  --destructive: #f87171;
+  --destructive-foreground: #08090d;
+  --destructive-tint: rgba(248, 113, 113, 0.12);
+  --star: #fbbf24;
+
+  --elevation-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --elevation-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --elevation-md: 0 4px 12px -2px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+
+  --code-bg: rgba(255, 255, 255, 0.07);
+  --code-block-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Without backdrop blur, or when the user asks for less transparency, panels become solid. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root,
+  .dark {
+    --panel: var(--panel-solid);
+    --overlay: var(--overlay-solid);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  .dark {
+    --panel: var(--panel-solid);
+    --overlay: var(--overlay-solid);
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-label: var(--label);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-panel: var(--panel);
+  --color-panel-border: var(--panel-border);
+  --color-overlay: var(--overlay);
+  --color-overlay-border: var(--overlay-border);
+  --color-field: var(--field);
+  --color-field-border: var(--field-border);
+  --color-hover: var(--hover);
+  --color-pressed: var(--pressed);
+  --color-brand: var(--brand);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-ring: var(--accent-ring);
+  --color-accent-text: var(--accent-text);
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-tint: var(--success-tint);
+  --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
+  --color-warning-tint: var(--warning-tint);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-tint: var(--destructive-tint);
+  --color-star: var(--star);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-secondary: var(--secondary);
@@ -129,6 +246,7 @@
   --color-presence-6: var(--presence-6);
   --color-presence-7: var(--presence-7);
   --color-presence-8: var(--presence-8);
+  --color-presence-foreground: var(--presence-foreground);
 
   --radius-xs: calc(var(--radius) - 6px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -136,11 +254,15 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+  --radius-panel: var(--radius-panel-size);
+  --radius-card: var(--radius-card-size);
+  --radius-item: var(--radius-item-size);
 
   --shadow-xs: var(--elevation-xs);
   --shadow-sm: var(--elevation-sm);
   --shadow-md: var(--elevation-md);
   --shadow-lg: var(--elevation-lg);
+  --shadow-overlay: var(--overlay-shadow);
 
   --ease-standard: var(--motion-ease);
 
@@ -148,5 +270,6 @@
   --font-mono: var(--font-code);
 
   --container-reading: var(--prose-width);
+  --container-content: 940px;
   --leading-reading: var(--prose-line-height);
 }

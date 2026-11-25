@@ -10,19 +10,36 @@ Tailwind is compiled by the official `@tailwindcss/turbopack` loader configured 
 
 | File                                  | Purpose                                                                                                                                   |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `frontend/app/globals.css`            | The only CSS entry, imported by `app/layout.tsx`. Imports Tailwind, `tw-animate-css` and the tokens, then holds the legacy screen styles. |
-| `frontend/src/styles/tokens.css`      | **All design tokens**, light and dark, and their mapping to Tailwind.                                                                     |
+| `frontend/app/globals.css`            | The only CSS entry, imported by `app/layout.tsx`. Imports Tailwind, `tw-animate-css`, the tokens and the surfaces, then holds base styles, the Markdown prose and the editor styles. |
+| `frontend/src/styles/tokens.css`      | **All design tokens**, light and dark, and their mapping to Tailwind. The only file that may contain colour values.                       |
+| `frontend/src/styles/surfaces.css`    | Surface utilities made from the tokens: `glass`, `glass-flat`, `glass-overlay`, `glass-backdrop`, `field`, `section-label`.               |
 | `frontend/src/styles/fonts.ts`        | Self-hosted Geist Sans and Geist Mono via `next/font/local`.                                                                              |
 | `frontend/src/styles/theme.ts`        | Theme helpers and the inline no-flash script.                                                                                             |
 | `frontend/src/hooks/useTheme.ts`      | React hook for reading and changing the theme.                                                                                            |
 | `frontend/src/components/primitives/` | shadcn/ui components (generated, then owned by us).                                                                                       |
 | `frontend/src/lib/utils.ts`           | `cn()` to merge class names.                                                                                                              |
 
-Legacy screens still use hand-written classes in `globals.css` with hard-coded light colours and
-the old Arial / Courier New fonts. That is deliberate: they keep their current look until each
-screen is migrated to token utilities. When migrating a screen, remove the pinned values it relied
-on (`body` colours, `--legacy-font-*`, and the `--default-*-font-family` overrides) once nothing
-else depends on them.
+## The look
+
+The interface is dark first and calm: a flat `--background`, slightly translucent panels with thin
+borders, and blur only on what floats (the sidebar, the top bar and overlays). There are no
+gradients, glows, coloured shadows or background images anywhere; the accent is a single solid
+colour. Keep it that way: depth comes from `glass*` surfaces, never from decoration.
+
+| Surface            | Use                                                                           |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `glass`            | Floating chrome that content scrolls under: sidebar, top bar.                 |
+| `glass-flat`       | Content panels on the flat page: document list, editor panes, list sections. |
+| `glass-overlay`    | Popovers, menus, dialogs, the command palette, toasts.                        |
+| `glass-backdrop`   | The dimmed layer behind a modal.                                              |
+| `field`            | Inset inputs.                                                                 |
+| `section-label`    | 11 px uppercase labels above sections.                                        |
+
+When `backdrop-filter` is unsupported or `prefers-reduced-transparency` is set, the tokens swap
+`--panel` and `--overlay` for solid values, so no component needs a fallback of its own.
+
+Radii: `rounded-lg` (10 px) for inputs and buttons, `rounded-item` (10 px) for list rows,
+`rounded-card` (16 px) for cards, `rounded-panel` (18 px) for panels, `rounded-full` for chips.
 
 ## The token file
 
@@ -35,17 +52,17 @@ else depends on them.
 
 | Group      | Variables                                                                                                                                                                              | Example utilities                                                         |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Colour     | `background`, `foreground`, `muted(-foreground)`, `border`, `input`, `ring`, `primary(-foreground)`, `destructive(-foreground)`, `popover`, `secondary`, `accent` (with `-foreground`) | `bg-background`, `text-muted-foreground`, `border-border`, `ring-ring/50` |
-| Presence   | `presence-1` … `presence-8`                                                                                                                                                            | `bg-presence-3`, or `var(--presence-3)` in JS                             |
-| Radius     | `--radius` (base), scale derived from it                                                                                                                                               | `rounded-sm` … `rounded-2xl`                                              |
+| Colour     | `background`, `foreground(-secondary)`, `muted-foreground`, `label`, `panel(-border)`, `overlay(-border)`, `field(-border)`, `hover`, `pressed`, `brand`, `primary(-hover/-foreground)`, `accent-tint/-ring/-text`, `success/warning/destructive` (with `-text`/`-tint`), `star`, and the shadcn/ui names (`border`, `input`, `ring`, `popover`, `secondary`, `accent`) mapped onto them | `bg-background`, `text-muted-foreground`, `bg-accent-tint`, `text-star` |
+| Presence   | `presence-1` … `presence-8`, `presence-foreground`: solid avatar fills with white initials                                                                                            | `bg-presence-3`, or `var(--presence-3)` in JS                             |
+| Radius     | `--radius` (base, 10 px), scale derived from it, plus `panel`, `card` and `item`                                                                                                       | `rounded-lg`, `rounded-panel`, `rounded-card`, `rounded-item`             |
 | Shadow     | `--elevation-xs` … `--elevation-lg`                                                                                                                                                    | `shadow-xs` … `shadow-lg`                                                 |
 | Motion     | `--duration-fast` (150ms), `--duration-normal` (200ms), `--motion-ease`                                                                                                                | `duration-(--duration-fast) ease-standard`                                |
-| Typography | `--font-ui`, `--font-code`, `--prose-width` (70ch), `--prose-line-height` (1.7)                                                                                                        | `font-sans`, `font-mono`, `max-w-reading`, `leading-reading`              |
+| Typography | `--font-ui`, `--font-code`, `--prose-width` (68ch), `--prose-line-height` (1.75)                                                                                                       | `font-sans`, `font-mono`, `max-w-reading`, `leading-reading`              |
 
 Spacing uses Tailwind's default scale; there are no spacing tokens.
 
-The radius scale and `shadow-xs` / `shadow-sm` are set to Tailwind's default values, so utilities
-already used by existing screens look exactly as before.
+Every colour pair used for text is checked for WCAG AA in both themes; the ratios are listed at
+the top of `tokens.css`. Re-check them when you change a value.
 
 ## Adding a token
 
@@ -94,32 +111,32 @@ Then review the result before committing:
   sure imports use `@/src/lib/utils` and that no `cn` package was installed.
 - Components that read the theme (such as `sonner`) are generated with `next-themes`. Use
   `useTheme` from `@/src/hooks/useTheme` instead and do not install `next-themes`.
+- If the CLI asks to overwrite an existing primitive (for example `dialog.tsx`), answer no: the
+  existing ones carry the glass styling.
 - Leave `src/styles/tokens.css` and `app/globals.css` as they are; if the CLI adds variables, move
   any genuinely new token into `tokens.css` by hand.
 - Run `bun run format` so the generated files follow the project's Prettier style.
 
-Components that need a provider (`TooltipProvider`, `Toaster`) are not mounted yet; mount them in
-the layout when the first screen uses them.
+`TooltipProvider` and `Toaster` are mounted once, in `AppShell`.
 
 ## Dark mode
 
 - The theme is the `dark` class on `<html>`. Tailwind's `dark:` variant is bound to it in
   `tokens.css` (`@custom-variant dark`), and `.dark` swaps the token values.
-- `themeInitScript` (in `src/styles/theme.ts`) runs inline in `<head>` before the first paint. It
-  reads `localStorage["marksync-theme"]` (`light` or `dark`); without a stored value it follows
-  `prefers-color-scheme` and keeps following system changes. This prevents a flash of the wrong
-  theme. `<html>` has `suppressHydrationWarning` because the script changes its class before
-  React hydrates.
+- Dark is the default. `themeInitScript` (in `src/styles/theme.ts`) runs inline in `<head>` before
+  the first paint. It reads `localStorage["marksync-theme"]` (`light`, `dark` or `system`); without
+  a stored value it applies dark, and with `system` it follows `prefers-color-scheme` and keeps
+  following system changes. This prevents a flash of the wrong theme. `<html>` has
+  `suppressHydrationWarning` because the script changes its class before React hydrates.
 - In components, use the hook:
 
   ```tsx
   const { preference, resolvedTheme, setPreference, toggle } = useTheme();
-  setPreference("system"); // clears the stored choice
+  setPreference("system"); // follow the operating system
   ```
 
   Changes apply immediately, are persisted, and are picked up by other tabs.
 
 - Outside React, `setThemePreference()` and `toggleTheme()` do the same.
-- Legacy screens use hard-coded light colours, so they stay light in dark mode until migrated.
-  `color-scheme` is not set yet for the same reason (it would darken native form controls on
-  those screens); add `color-scheme: dark` to `.dark` once the main screens use tokens.
+- `color-scheme` is set by the tokens (`light` on `:root`, `dark` on `.dark`), so native controls
+  and scrollbars follow the theme.

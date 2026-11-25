@@ -2,29 +2,48 @@
 
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
+import { LogIn } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { ApiError } from '@/src/apiClient';
 import { signInPath } from '@/src/auth/authState';
 import { useAuth, useUser } from '@/src/auth/AuthProvider';
+import { BrandTile } from '@/src/components/common/Identity';
 import { DocumentEditor } from '@/src/components/DocumentEditor';
-import { ContentSkeleton, LoadError } from '@/src/components/PageStates';
-import { Brand } from '@/src/components/ui';
+import { DocumentSkeleton, ErrorState, LoadError } from '@/src/components/PageStates';
+import { Button } from '@/src/components/primitives/button';
+import { Breadcrumb, TopBar } from '@/src/components/shell/TopBar';
 import { useDocument } from '@/src/hooks/useDocument';
 
-/** Header for anonymous visitors, who read public documents without the app shell. */
-function PublicFrame({ children }: { children: React.ReactNode }) {
+/** Anonymous visitors read public documents without the app shell. */
+function PublicFrame({ children }: { children: ReactNode }) {
+  return <main className="flex min-h-dvh flex-col gap-3 p-3">{children}</main>;
+}
+
+/** The bar shown to anonymous visitors before a document can be drawn. */
+function PublicBar() {
   const pathname = usePathname();
   return (
-    <main className="workspace public-view">
-      <section className="editor-workspace">
-        <header className="workspace-topbar">
-          <Brand />
-          <Link className="button subtle" href={signInPath(pathname)}>
-            Sign in
-          </Link>
-        </header>
-        {children}
-      </section>
-    </main>
+    <TopBar
+      breadcrumb={
+        <Breadcrumb
+          items={[
+            {
+              label: (
+                <span className="inline-flex items-center gap-2 font-semibold text-foreground">
+                  <BrandTile className="size-6 text-xs" /> MarkSync
+                </span>
+              ),
+            },
+          ]}
+        />
+      }
+    >
+      <Button asChild size="sm" variant="outline">
+        <Link href={signInPath(pathname)}>
+          <LogIn /> Sign in
+        </Link>
+      </Button>
+    </TopBar>
   );
 }
 
@@ -36,28 +55,34 @@ export default function DocumentPage() {
   const { docId } = useParams<{ docId: string }>();
   const { data: document, error, loading, reload } = useDocument(Number(docId));
 
-  let content: React.ReactNode;
+  let content: ReactNode;
   if (loading) {
-    content = <ContentSkeleton variant="document" label="Loading document…" />;
+    content = <DocumentSkeleton />;
   } else if (!document) {
     const status = error instanceof ApiError ? error.status : undefined;
     content =
       !user && (status === 401 || status === 403) ? (
-        <div className="editor-body">
-          <div className="loading-error mx-auto py-16" role="alert">
-            <h1>This document is private</h1>
-            <p>Sign in to view it.</p>
-            <Link className="button primary" href={signInPath(pathname)}>
-              Sign in
-            </Link>
-          </div>
-        </div>
+        <>
+          <PublicBar />
+          <ErrorState
+            title="This document is private"
+            detail="Sign in to view it."
+            action={
+              <Button asChild>
+                <Link href={signInPath(pathname)}>Sign in</Link>
+              </Button>
+            }
+          />
+        </>
       ) : (
-        <LoadError
-          error={error ?? new Error('Unable to load this document.')}
-          subject="document"
-          onRetry={reload}
-        />
+        <>
+          {!user && <PublicBar />}
+          <LoadError
+            error={error ?? new Error('Unable to load this document.')}
+            subject="document"
+            onRetry={reload}
+          />
+        </>
       );
   } else {
     content = (

@@ -50,14 +50,18 @@ test.describe('server-state cache', () => {
   test('moving between sections reuses what is already loaded', async ({ page }) => {
     const requests = await signIn(page);
     await page.goto('/w/1');
-    await expect(page.getByRole('link', { name: /Original/ })).toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Documents' }).getByRole('link', { name: /Original/ }),
+    ).toBeVisible();
     expect(requests).toEqual({ me: 1, workspaces: 1, invitations: 1, documents: 1 });
 
-    await page.getByRole('link', { name: 'Members' }).click();
+    await page.getByRole('link', { name: 'Members', exact: true }).click();
     await expect(page.getByText('Loading members…')).toBeHidden();
     await expect(page).toHaveURL('/w/1/members');
-    await page.getByRole('link', { name: 'Documents' }).click();
-    await expect(page.getByRole('link', { name: /Original/ })).toBeVisible();
+    await page.getByRole('link', { name: 'Documents', exact: true }).click();
+    await expect(
+      page.getByRole('list', { name: 'Documents' }).getByRole('link', { name: /Original/ }),
+    ).toBeVisible();
 
     // The user, the sidebar and the document list came from the cache the second time.
     expect(requests).toEqual({ me: 1, workspaces: 1, invitations: 1, documents: 1 });
@@ -70,14 +74,18 @@ test.describe('server-state cache', () => {
       route.fulfill({ json: { id: 7, email: 'student@sussex.ac.uk', role: 'user' } }),
     );
     await page.goto('/w/1');
-    await expect(page.getByRole('link', { name: /Original/ })).toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Documents' }).getByRole('link', { name: /Original/ }),
+    ).toBeVisible();
 
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL('/auth');
     await page.getByLabel('Email').fill('student@sussex.ac.uk');
     await page.getByLabel('Password').fill('securepassword123');
     await page.getByRole('button', { name: 'Login', exact: true }).click();
-    await expect(page.getByRole('link', { name: /Original/ })).toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Documents' }).getByRole('link', { name: /Original/ }),
+    ).toBeVisible();
 
     // The first user's data was dropped, so the second session loaded everything again.
     expect(requests.me).toBe(2);
@@ -97,7 +105,9 @@ test.describe('prefetching', () => {
       return route.fulfill({ json: document(2, 'Original') });
     });
     await page.goto('/w/1');
-    const link = page.getByRole('link', { name: /Original/ });
+    const link = page
+      .getByRole('list', { name: 'Documents' })
+      .getByRole('link', { name: /Original/ });
     await expect(link).toBeVisible();
     expect(documentRequests).toBe(0);
 
@@ -167,7 +177,9 @@ test.describe('entering a page directly', () => {
       return route.fulfill({ json: [document(2, 'Original')] });
     });
     await page.goto('/w/1');
-    await expect(page.getByRole('link', { name: /Original/ })).toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Documents' }).getByRole('link', { name: /Original/ }),
+    ).toBeVisible();
     expect(documentsBeforeSession).toBe(1);
     expect(requests.documents).toBe(1);
   });

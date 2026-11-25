@@ -20,11 +20,14 @@ it.**
   the server's state arrived, and what the server allows. Do not add per-keystroke fields to it.
 - **Remote cursors and selections.** They belong to CodeMirror: `y-codemirror.next` reads the Yjs
   awareness and draws them as editor decorations. They must never be copied into React state.
-- **Workspace presence.** Who is online and the message list are state of one component,
-  `WorkspacePresencePanel`, which is memoised with stable props. When presence grows (typing
-  indicators, per-document avatars, cursor positions in a list), move it to an external store with
-  `useSyncExternalStore`, as the collaboration code does, and select only the slice a component
-  needs. Never lift it into a page or into a context that wraps pages.
+- **Workspace presence.** The shell owns one connection per open workspace, behind a
+  `PresenceHub` (`src/presence/PresenceHub.ts`): a stable store whose context value never
+  changes. The top-bar leaves (`LiveStatus`, `PresenceAvatars`, `ChatButton`, the online count in
+  the workspace subtitle) each read one slice (status, users or messages) with
+  `useSyncExternalStore`, so a user joining or a message arriving re-renders those leaves only.
+  Never copy presence into page state or into a context value that changes.
+- **Cursor position.** The editor writes line and column to a small store
+  (`createCursorStore` in `src/components/document/editorState.ts`); only the status bar reads it.
 - **Anything new that updates faster than a few times per second** follows the same shape: an
   object with `getSnapshot` and `subscribe`, read through `useSyncExternalStore` in a leaf.
 
@@ -51,20 +54,22 @@ Callbacks passed to memoised children (`onSessionExpired`, row handlers) must be
 
 Next.js already splits JavaScript per route. The extra split is the editor: `DocumentEditor`
 loads `CollaborativeEditor` (CodeMirror and its language packs, roughly 530 kB raw) with
-`next/dynamic`, so it is not part of the document route's first load. Keep other large, optional
-libraries behind the same pattern, and give the placeholder the final element's box so nothing
-moves when it loads.
+`next/dynamic`, so it is not part of the document route's first load. The shell's overlays (the
+command palette with `cmdk`, the invite dialog with its Select, the new workspace dialog and the
+mobile navigation drawer) load the same way, the first time they open, and then stay mounted.
+Keep other large, optional libraries behind the same pattern, and give the placeholder the final
+element's box so nothing moves when it loads.
 
 ## Loading states
 
-Signed-in pages show `PageSkeleton` while their data loads: the real sidebar, top bar and content
-frame, with placeholder bars whose heights are those of the elements that replace them (measured
-with an empty presence panel and two workspaces). The goal is no layout shift when data arrives.
-Where the real layout depends on data that is not known yet, reserve its room instead of letting
-it pop in: the sidebar list (`WorkspaceListPlaceholder`) and the presence panel
-(`PresencePanelPlaceholder`). If the sidebar, top bar or editor heading changes size, re-measure
-and update the numbers in `PageSkeleton.tsx`; check for shifts at 412 px and 1280 px wide with a
-`layout-shift` PerformanceObserver. Do not hold a page back to avoid a shift: a slow secondary
+Signed-in pages render their real top bar at once and show skeletons from `PageStates.tsx` in the
+content area while their data loads: `ShellSkeleton` before the session is known, then
+`HeaderSkeleton`, `ContentSkeleton` (`documents` or `list`) and `DocumentSkeleton`, whose bars have
+the heights of the elements that replace them (60 px rows, 92 px quick-action cards, the 40 px
+title). The goal is no layout shift when data arrives. Where the real layout depends on data that
+is not known yet, reserve its room instead of letting it pop in, as the sidebar does with
+`WorkspaceListPlaceholder`. If a row, card or header changes size, update the skeleton with it;
+check for shifts at 390 px and 1440 px wide with a `layout-shift` PerformanceObserver. Do not hold a page back to avoid a shift: a slow secondary
 request (membership, presence) must never keep a document from appearing.
 
 ## How to measure

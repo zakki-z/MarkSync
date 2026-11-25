@@ -16,6 +16,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={resolvedTheme}
+      position="bottom-right"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
@@ -24,12 +25,21 @@ const Toaster = ({ ...props }: ToasterProps) => {
         error: <OctagonXIcon className="size-4" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
+      toastOptions={{
+        classNames: {
+          toast: 'glass-overlay! rounded-xl! text-foreground! font-sans! gap-2.5!',
+          description: 'text-muted-foreground!',
+          actionButton: 'bg-accent-tint! text-accent-text! rounded-md! font-medium!',
+          success: '[&_[data-icon]]:text-success',
+          error: '[&_[data-icon]]:text-destructive',
+        },
+      }}
       style={
         {
-          '--normal-bg': 'var(--popover)',
+          '--normal-bg': 'var(--overlay)',
           '--normal-text': 'var(--popover-foreground)',
-          '--normal-border': 'var(--border)',
-          '--border-radius': 'var(--radius)',
+          '--normal-border': 'var(--overlay-border)',
+          '--border-radius': '12px',
         } as React.CSSProperties
       }
       {...props}

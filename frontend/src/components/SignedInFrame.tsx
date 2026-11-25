@@ -51,6 +51,7 @@ export function SignedInFrame({ children }: { children: ReactNode }) {
         <AppShell
           user={state.user}
           activeWorkspaceId={params.workspaceId ? Number(params.workspaceId) : undefined}
+          documentOpen={params.docId !== undefined}
         >
           {children}
         </AppShell>

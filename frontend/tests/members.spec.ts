@@ -44,6 +44,14 @@ async function signIn(page: Page, userId = 7) {
   await page.route('**/api/workspaces', (route) => route.fulfill({ json: [workspace] }));
 }
 
+const pendingList = (page: Page) => page.getByRole('list', { name: 'Pending invitations' });
+const memberList = (page: Page) => page.getByRole('list', { name: 'Members' });
+
+async function rowAction(page: Page, row: string, action: string, role = 'menuitem') {
+  await page.getByRole('button', { name: `Actions for ${row}` }).click();
+  await page.getByRole(role as 'menuitem', { name: action }).click();
+}
+
 test.describe('members and invitations pages', () => {
   test('an owner invites and revokes on the invitations page and manages roles on the members page', async ({
     page,
@@ -80,26 +88,32 @@ test.describe('members and invitations pages', () => {
     );
 
     await page.goto('/w/1/invitations');
-    await expect(page.getByRole('heading', { name: 'Invite someone' })).toBeVisible();
-    await expect(page.getByText('dana')).toBeVisible();
+    await expect(pendingList(page).getByText('dana')).toBeVisible();
 
-    await page.getByLabel('Username or email').fill('omar');
-    await page.locator('.invite-form select').selectOption('VIEWER');
-    await page.getByRole('button', { name: 'Send invitation' }).click();
-    await expect(page.getByText('omar')).toBeVisible();
-    await expect(page.getByLabel('Username or email')).toHaveValue('');
+    await page.getByRole('button', { name: 'Invite people' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Invite people to Team' });
+    await expect(dialog.getByText('Already in Team')).toBeVisible();
+    await dialog.getByLabel('Usernames or emails').fill('omar');
+    await dialog.getByRole('combobox', { name: 'Role' }).click();
+    await page.getByRole('option', { name: 'Viewer' }).click();
+    await dialog.getByRole('button', { name: 'Send invite' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(pendingList(page).getByText('omar')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Revoke invitation for dana' }).click();
-    await expect(page.getByText('dana')).toHaveCount(0);
+    await rowAction(page, 'dana', 'Revoke invitation');
+    await expect(pendingList(page).getByText('dana')).toHaveCount(0);
 
     await page.getByRole('link', { name: 'Members' }).click();
-    await expect(page.getByRole('heading', { name: 'Invite someone' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Invite people' })).toHaveCount(0);
     await expect(page.getByText('olivia (you)')).toBeVisible();
-    await page.getByLabel('Role of vera').selectOption('EDITOR');
-    await expect(page.getByLabel('Role of vera')).toHaveValue('EDITOR');
+    await rowAction(page, 'vera', 'Editor', 'menuitemradio');
+    await expect(page.getByText('vera is now Editor')).toBeVisible();
+    await expect(memberList(page).getByRole('listitem').filter({ hasText: 'vera' })).toContainText(
+      'Editor',
+    );
 
-    await page.getByRole('button', { name: 'Remove vera' }).click();
-    await expect(page.getByText('vera')).toHaveCount(0);
+    await rowAction(page, 'vera', 'Remove vera');
+    await expect(memberList(page).getByText('vera')).toHaveCount(0);
   });
 
   test('shows the API error when the last owner is demoted', async ({ page }) => {
@@ -117,9 +131,9 @@ test.describe('members and invitations pages', () => {
     );
 
     await page.goto('/w/1/members');
-    await page.getByLabel('Role of olivia').selectOption('VIEWER');
-    await expect(page.locator('.alert.error')).toContainText('at least one owner');
-    await expect(page.getByLabel('Role of olivia')).toHaveValue('OWNER');
+    await rowAction(page, 'olivia', 'Viewer', 'menuitemradio');
+    await expect(page.getByRole('alert').filter({ hasText: 'at least one owner' })).toBeVisible();
+    await expect(memberList(page).getByRole('listitem')).toContainText('Owner');
   });
 
   test('shows the invitation error without clearing what was typed', async ({ page }) => {
@@ -139,10 +153,13 @@ test.describe('members and invitations pages', () => {
 
     await page.goto('/w/1/invitations');
     await expect(page.getByText('No pending invitations.')).toBeVisible();
-    await page.getByLabel('Username or email').fill('ghost');
-    await page.getByRole('button', { name: 'Send invitation' }).click();
-    await expect(page.locator('.alert.error')).toContainText('No user matches');
-    await expect(page.getByLabel('Username or email')).toHaveValue('ghost');
+    await page.getByRole('button', { name: 'Invite people' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Invite people to Team' });
+    await dialog.getByLabel('Usernames or emails').fill('ghost');
+    await dialog.getByRole('button', { name: 'Send invite' }).click();
+    await expect(dialog.getByRole('alert').filter({ hasText: 'No user matches' })).toBeVisible();
+    // What was typed stays, as a tag that can be fixed or removed.
+    await expect(dialog.getByRole('button', { name: 'Remove ghost' })).toBeVisible();
   });
 
   test('a viewer sees a read-only member list and can only leave', async ({ page }) => {
@@ -167,15 +184,19 @@ test.describe('members and invitations pages', () => {
     await page.goto('/w/1/members');
     await expect(page.getByText('olivia')).toBeVisible();
     await expect(page.getByRole('combobox')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Remove|Revoke/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Actions for olivia' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Actions for vera' }).click();
+    await expect(page.getByRole('menuitemradio')).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: /Remove/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
     await page.getByRole('link', { name: 'Invitations', exact: true }).click();
     await expect(page.getByText('Only workspace owners can invite')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Invite someone' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Invite people' })).toHaveCount(0);
     expect(invitationRequests).toBe(0);
     await page.getByRole('link', { name: 'Members', exact: true }).click();
 
     await page.route('**/api/documents*', (route) => route.fulfill({ json: [] }));
-    await page.getByRole('button', { name: 'Leave' }).click();
+    await rowAction(page, 'vera', 'Leave workspace');
     await expect(page).toHaveURL(/\/documents|\/w\//);
   });
 
@@ -192,7 +213,7 @@ test.describe('members and invitations pages', () => {
     await page.goto('/w/1/members');
     await expect(page.getByRole('heading', { name: 'Not found' })).toBeVisible();
     await expect(page.getByText('This workspace does not exist or was deleted.')).toBeVisible();
-    await expect(page.locator('aside.sidebar')).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Sidebar' })).toBeVisible();
   });
 });
 
@@ -241,7 +262,7 @@ test.describe('my invitations', () => {
 
     await page.goto('/invitations');
     await page.getByRole('button', { name: 'Accept invitation to Team' }).click();
-    await expect(page.locator('.alert.error')).toContainText('expired');
-    await expect(page.locator('strong', { hasText: 'Team' })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'expired' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Invitations' })).toContainText('Team');
   });
 });

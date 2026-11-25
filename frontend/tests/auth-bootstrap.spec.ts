@@ -33,12 +33,13 @@ async function recordAlerts(page: Page) {
     (window as unknown as { alertsSeen: Set<string> }).alertsSeen = seen;
     const record = () =>
       document
-        .querySelectorAll('[role=alert], .loading-error h1')
+        .querySelectorAll('[role=alert]')
         .forEach((node) => seen.add(node.textContent?.trim() ?? ''));
     new MutationObserver(record).observe(document, { childList: true, subtree: true });
     document.addEventListener('DOMContentLoaded', record);
   });
 }
+const sidebar = (page: Page) => page.getByRole('complementary', { name: 'Sidebar' });
 const alertsSeen = (page: Page) =>
   page.evaluate(() => [...(window as unknown as { alertsSeen: Set<string> }).alertsSeen]);
 
@@ -66,9 +67,9 @@ async function slowSignedInApi(page: Page) {
 
 test.describe('signed-in bootstrap', () => {
   for (const [path, ready] of [
-    ['/w/1', '+ New document'],
-    ['/w/1/members', 'owner'],
-    ['/w/1/invitations', 'owner'],
+    ['/w/1', 'No documents yet'],
+    ['/w/1/members', 'This workspace has no members.'],
+    ['/w/1/invitations', 'No pending invitations.'],
     ['/w/1/d/9', 'Plan'],
     ['/invitations', 'My invitations'],
   ] as const) {
@@ -79,9 +80,14 @@ test.describe('signed-in bootstrap', () => {
       await slowSignedInApi(page);
       await recordAlerts(page);
       await page.goto(path);
-      await expect(page.locator('aside.sidebar')).toBeVisible();
+      await expect(sidebar(page)).toBeVisible();
       await expect(page.locator('[aria-busy=true]').first()).toBeVisible();
-      await expect(page.locator('.profile-bar')).toContainText(user.email);
+      // Document pages show the sidebar as an icon rail, with the account as an avatar.
+      await expect(
+        path.includes('/d/')
+          ? sidebar(page).getByRole('img', { name: user.email })
+          : page.getByTestId('account-card'),
+      ).toContainText(path.includes('/d/') ? 'U' : user.email);
       await expect(page.getByText(ready, { exact: true }).first()).toBeVisible();
       await expect(page.locator('[aria-busy=true]')).toHaveCount(0);
       expect(await alertsSeen(page)).toEqual([]);
@@ -94,16 +100,16 @@ test.describe('signed-in bootstrap', () => {
     await slowSignedInApi(page);
     await recordAlerts(page);
     await page.goto('/w/1');
-    await expect(page.getByText('+ New document')).toBeEnabled();
-    const sidebar = await page.locator('aside.sidebar').elementHandle();
+    await expect(page.getByText('No documents yet')).toBeVisible();
+    const aside = await sidebar(page).elementHandle();
     await page.getByRole('link', { name: 'Members' }).click();
-    await expect(page.getByText('owner', { exact: true })).toBeVisible();
+    await expect(page.getByText('This workspace has no members.')).toBeVisible();
     await page.getByRole('link', { name: 'Invitations', exact: true }).click();
     await expect(page.getByRole('link', { name: 'Invitations', exact: true })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(await sidebar!.evaluate((node) => node.isConnected)).toBe(true);
+    expect(await aside!.evaluate((node) => node.isConnected)).toBe(true);
     expect(await alertsSeen(page)).toEqual([]);
   });
 });
@@ -164,7 +170,7 @@ test.describe('route guard', () => {
     await page.route('**/api/documents/9', (route) => route.fulfill({ status: 401, json: {} }));
     await page.goto('/w/1/d/9');
     await expect(page.getByRole('heading', { name: 'This document is private' })).toBeVisible();
-    await expect(page.locator('aside.sidebar')).toHaveCount(0);
+    await expect(sidebar(page)).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Sign in' }).first()).toHaveAttribute(
       'href',
       '/auth?next=%2Fw%2F1%2Fd%2F9',
@@ -192,10 +198,10 @@ test.describe('errors inside the content area', () => {
     ).toBeVisible();
     // The read was retried once automatically before the error appeared.
     expect(calls).toBe(2);
-    await expect(page.locator('aside.sidebar')).toBeVisible();
+    await expect(sidebar(page)).toBeVisible();
     await expect(page.getByText('Please sign in to continue')).toHaveCount(0);
     await page.getByRole('button', { name: 'Retry' }).click();
-    await expect(page.getByText('+ New document')).toBeEnabled();
+    await expect(page.getByText('All documents')).toBeVisible();
   });
 
   test('a workspace the user cannot access says so instead of asking them to sign in', async ({
@@ -213,7 +219,7 @@ test.describe('errors inside the content area', () => {
     );
     await page.goto('/w/2/members');
     await expect(page.getByRole('heading', { name: 'No access' })).toBeVisible();
-    await expect(page.locator('aside.sidebar')).toBeVisible();
+    await expect(sidebar(page)).toBeVisible();
     await expect(page.getByRole('link', { name: 'Back to your workspaces' })).toBeVisible();
   });
 
@@ -233,6 +239,6 @@ test.describe('errors inside the content area', () => {
     await expect(page.getByRole('heading', { name: 'Unable to reach MarkSync' })).toBeVisible();
     await expect(page).toHaveURL('/w/1');
     await page.getByRole('button', { name: 'Retry' }).click();
-    await expect(page.getByText('+ New document')).toBeEnabled();
+    await expect(page.getByText('All documents')).toBeVisible();
   });
 });
