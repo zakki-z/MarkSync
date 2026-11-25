@@ -115,6 +115,24 @@ test.describe('command palette', () => {
     await expect(palette(page)).toBeVisible();
   });
 
+  test('reopening while it is still closing leaves the results clickable', async ({ page }) => {
+    await signIn(page);
+    await page.route('**/api/workspaces/1/documents', (route) => route.fulfill({ json: [] }));
+    await page.route('**/api/workspaces/2/documents', (route) => route.fulfill({ json: [] }));
+    await page.goto('/w/1');
+    await expect(page.getByText('No documents yet')).toBeVisible();
+    await page.keyboard.press('Control+k');
+    await expect(palette(page).getByRole('combobox')).toBeFocused();
+    // Reopen after the backdrop has faded out (150 ms) but while the panel is still closing
+    // (200 ms): Radix then mounts a new backdrop after the panel, which must stay underneath it.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(175);
+    await page.keyboard.press('Control+k');
+    await palette(page).getByRole('combobox').fill('personal');
+    await page.getByRole('option', { name: 'Personal' }).click({ timeout: 5_000 });
+    await expect(page).toHaveURL('/w/2');
+  });
+
   test('runs actions: new document, workspaces and the invite dialog', async ({ page }) => {
     await signIn(page);
     await page.route('**/api/workspaces/1/members', (route) => route.fulfill({ json: [] }));

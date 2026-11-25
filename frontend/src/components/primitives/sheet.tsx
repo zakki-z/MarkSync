@@ -22,6 +22,12 @@ function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Po
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />;
 }
 
+/*
+ * Radix portals the overlay and the content separately. Reopening during the closing animation
+ * keeps the content but mounts a new overlay after it, so with equal z-index the overlay would
+ * cover the content and swallow every click. The content therefore sits one level above its
+ * overlay, and layers that are closing never catch the pointer.
+ */
 function SheetOverlay({
   className,
   ...props
@@ -30,7 +36,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        'glass-backdrop fixed inset-0 z-50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        'glass-backdrop fixed inset-0 z-50 data-[state=closed]:pointer-events-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
         className,
       )}
       {...props}
@@ -57,7 +63,7 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          'glass-overlay fixed z-50 flex flex-col gap-4 text-foreground transition ease-standard data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-200',
+          'glass-overlay fixed z-[51] flex flex-col data-[state=closed]:pointer-events-none gap-4 text-foreground transition ease-standard data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-200',
           side === 'right' &&
             'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
           side === 'left' &&
