@@ -1,3 +1,16 @@
+'use client';
+
+import { LogOut, UserMinus, Users } from 'lucide-react';
+import { UserAvatar } from '@/src/components/common/Identity';
+import { ListPanel, ListRow, ListRows, RoleBadge, RowMenu } from '@/src/components/common/ListRow';
+import { EmptyState } from '@/src/components/PageStates';
+import {
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+} from '@/src/components/primitives/dropdown-menu';
 import { prettyDate } from '@/src/format';
 import type { Member, Role } from '@/src/workspaceService';
 import { ROLES, roleLabel } from '@/src/components/roleLabel';
@@ -12,7 +25,7 @@ type Props = {
   onLeave: () => void;
 };
 
-const nameOf = (member: Member) => member.username ?? `User ${member.userId}`;
+export const memberName = (member: Member) => member.username ?? `User ${member.userId}`;
 
 export function MemberList({
   members,
@@ -23,57 +36,60 @@ export function MemberList({
   onLeave,
 }: Props) {
   return (
-    <section className="panel" aria-labelledby="members-heading">
-      <h2 id="members-heading">Members</h2>
-      {!members.length && <p className="empty">This workspace has no members.</p>}
-      <ul className="people">
-        {members.map((member) => {
-          const isSelf = member.userId === currentUserId;
-          return (
-            <li key={member.userId} className="person">
-              <div className="person-info">
-                <strong>
-                  {nameOf(member)}
-                  {isSelf ? ' (you)' : ''}
-                </strong>
-                <small>Joined {prettyDate(member.joinedAt)}</small>
-              </div>
-              {canManage ? (
-                <select
-                  className="field role-select"
-                  aria-label={`Role of ${nameOf(member)}`}
-                  value={member.role}
-                  onChange={(event) => onChangeRole(member, event.target.value as Role)}
-                >
-                  {ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {roleLabel(role)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="role-badge">{roleLabel(member.role)}</span>
-              )}
-              {isSelf ? (
-                <button type="button" className="button" onClick={onLeave}>
-                  Leave
-                </button>
-              ) : (
-                canManage && (
-                  <button
-                    type="button"
-                    className="button danger"
-                    aria-label={`Remove ${nameOf(member)}`}
-                    onClick={() => onRemove(member)}
-                  >
-                    Remove
-                  </button>
-                )
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <ListPanel id="members-heading" title="Members" count={members.length}>
+      {!members.length ? (
+        <EmptyState icon={Users} title="This workspace has no members." />
+      ) : (
+        <ListRows label="Members">
+          {members.map((member) => {
+            const isSelf = member.userId === currentUserId;
+            const name = memberName(member);
+            const hasActions = isSelf || canManage;
+            return (
+              <ListRow
+                key={member.userId}
+                leading={<UserAvatar id={Number(member.userId) || member.userId} name={name} />}
+                title={`${name}${isSelf ? ' (you)' : ''}`}
+                detail={`Joined ${prettyDate(member.joinedAt)}`}
+                badge={<RoleBadge role={member.role} />}
+                actions={
+                  hasActions && (
+                    <RowMenu label={`Actions for ${name}`}>
+                      {canManage && (
+                        <>
+                          <DropdownMenuLabel>Role</DropdownMenuLabel>
+                          <DropdownMenuRadioGroup
+                            value={member.role}
+                            onValueChange={(role) => {
+                              if (role !== member.role) onChangeRole(member, role as Role);
+                            }}
+                          >
+                            {ROLES.map((role) => (
+                              <DropdownMenuRadioItem key={role} value={role}>
+                                {roleLabel(role)}
+                              </DropdownMenuRadioItem>
+                            ))}
+                          </DropdownMenuRadioGroup>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      {isSelf ? (
+                        <DropdownMenuItem variant="destructive" onSelect={onLeave}>
+                          <LogOut /> Leave workspace
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem variant="destructive" onSelect={() => onRemove(member)}>
+                          <UserMinus /> Remove {name}
+                        </DropdownMenuItem>
+                      )}
+                    </RowMenu>
+                  )
+                }
+              />
+            );
+          })}
+        </ListRows>
+      )}
+    </ListPanel>
   );
 }
